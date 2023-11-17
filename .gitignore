@@ -1,0 +1,10 @@
+# Python PyPI package gitignore
+.vscode/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+dist/
+build/
