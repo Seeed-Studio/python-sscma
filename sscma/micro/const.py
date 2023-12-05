@@ -61,6 +61,16 @@ WIFI_ENC_WPA1_WPA2: Final[int] = 3
 WIFI_ENC_WPA2_WPA3: Final[int] = 4
 WIFI_ENC_WPA3: Final[int] = 5
 
+# wifi status
+WIFI_NO_JOINED: Final[int] = 0
+WIFI_JOINED_CHANGED: Final[int] = 1
+WIFI_JOINED: Final[int] = 2
+
+# mqtt status
+MQTT_NO_CONNECTED: Final[int] = 0
+MQTT_CONNECTED_CHANGED: Final[int] = 1
+MQTT_CONNECTED: Final[int] = 2
+
 MQTT_QOS_0: Final[int] = 0
 MQTT_QOS_1: Final[int] = 1
 MQTT_QOS_2: Final[int] = 2

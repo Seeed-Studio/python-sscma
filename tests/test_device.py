@@ -1,8 +1,8 @@
 import unittest
 import json
 from unittest.mock import MagicMock
-from sscma_micro.client import Client
-from sscma_micro.device import Device, DeviceInfoUnavailableException, PayloadDecodeException
+from sscma.micro.client import Client
+from sscma.micro.device import Device, DeviceInfoUnavailableException, PayloadDecodeException
 
 
 class TestDevice(unittest.TestCase):

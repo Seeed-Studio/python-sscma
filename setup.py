@@ -1,8 +1,8 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='sscma-micro',
-    version='0.1',
+    name='python-sscma',
+    version='1.0',
     author='LynnL4',
     author_email='lht856@foxmail.com',
     description='A simple python package for Home Assistant to control SSCMA devices',

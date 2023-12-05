@@ -1,4 +1,4 @@
-from sscma_micro.client import Client
+from sscma.micro.client import Client
 from unittest.mock import MagicMock
 import unittest
 

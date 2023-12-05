@@ -127,7 +127,7 @@ class Client:
             string.ascii_uppercase + string.digits, k=6))
         return tag
 
-    def send_command(self, command, wait_event=True):
+    def send_command(self, command, wait_event=True, timeout=None):
         """
         Sends a command to the device and waits for a response.
 
@@ -152,7 +152,10 @@ class Client:
             self._send('{}\r\n'.format(command).encode('utf-8'))
 
             if wait_event:
-                listener.event.wait(self._timeout)
+                if timeout is not None:
+                    listener.event.wait(timeout)
+                else:
+                    listener.event.wait(self._timeout)
                 # remove listener
                 self._listeners.remove(listener)
 
@@ -161,7 +164,7 @@ class Client:
 
         return listener.response
 
-    def set(self, command, value, tag=True, wait_event=True):
+    def set(self, command, value, tag=True, wait_event=True, timeout=None):
         """
         Sets a value for a command on the device.
 
@@ -187,7 +190,7 @@ class Client:
         else:
             return response
 
-    def get(self, command, tag=True, wait_event=True):
+    def get(self, command, tag=True, wait_event=True, timeout=None):
         """
         Queries the value of a command on the device.
 
@@ -211,7 +214,7 @@ class Client:
         else:
             return response
 
-    def execute(self, command, tag=False, wait_event=False):
+    def execute(self, command, tag=False, wait_event=False, timeout=None):
         """
         Executes a command on the device.
 
@@ -260,6 +263,9 @@ class Client:
                             if listener.name == paylod["name"]:
                                 listener.response = paylod
                                 listener.event.set()
+                                if self._debug:
+                                    _LOGGER.debug(
+                                        "response:{}".format(paylod))
 
                 if "type" in paylod and paylod["type"] == CMD_TYPE_EVENT:
                     if self._event_handler is not None:

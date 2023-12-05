@@ -13,7 +13,7 @@ class ModelInfo:
         Args:
             data (dict): The data containing model information.
         """
-        
+
         if data is None:
             # create a dummy  unknown model
             data = {
@@ -29,7 +29,7 @@ class ModelInfo:
                 "token": "",
                 "classes": "",
             }
-        
+
         self.data = data
 
     def __repr__(self):
@@ -39,11 +39,10 @@ class ModelInfo:
         Returns:
             str: The string representation of the ModelInfo instance.
         """
-        return "{} v{}".format(
+        return "ModelInfo(name={}, version={})".format(
             self.name,
             self.version
         )
-        
 
     @property
     def uuid(self) -> Optional[str]:

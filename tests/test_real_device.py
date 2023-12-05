@@ -1,18 +1,21 @@
-from sscma_micro.client import Client
-from sscma_micro.device import Device
-from sscma_micro.const import *
+from sscma.micro.client import Client
+from sscma.micro.device import Device
+from sscma.micro.const import *
 import serial
 import threading
 import time
 import logging
+import signal
 
 logging.basicConfig(level=logging.DEBUG)
 
 _LOGGER = logging.getLogger(__name__)
 
+recieve_thread_running = True
+
 
 def recieve_thread(serial_port, client):
-    while True:
+    while recieve_thread_running:
         if serial_port.in_waiting:
             msg = serial_port.read(serial_port.in_waiting)
             if msg != b'':
@@ -25,17 +28,27 @@ def monitor_handler(image, msg):
     print(msg)
 
 
+def signal_handler(signal, frame):
+    print("Ctrl+C pressed!")
+    global recieve_thread_running
+    recieve_thread_running = False
+    exit(0)
+
+
 def main():
-    serial_port = serial.Serial("/dev/ttyACM0", 115200, timeout=0.1)
+    signal.signal(signal.SIGINT, signal_handler)
+    serial_port = serial.Serial("COM77", 921600, timeout=0.1)
     client = Client(lambda msg: serial_port.write(msg), debug=1)
     threading.Thread(target=recieve_thread, args=(
         serial_port, client)).start()
 
+    time.sleep(1)
 
     device = Device(client, monitor_handler=monitor_handler, debug=1)
 
-    #device.set_wifi("Eureka", "31415926")
-    
+    print(device.info)
+
+    device.set_wifi("Eureka", "xxxxxxxx")
 
     # while (device.status & DeviceStatus.WIFI_CONNECTTING != DeviceStatus.WIFI_CONNECTTING):
     #     print("Waiting for network connection...")
@@ -49,19 +62,21 @@ def main():
     #     while (device.status & DeviceStatus.MQTT_CONNECTTING == DeviceStatus.MQTT_CONNECTTING):
     #         print("Waiting for MQTT connection...")
     #         time.sleep(1)
-            
+
     # if (device.status & DeviceStatus.MQTT_CONNECTED == DeviceStatus.MQTT_CONNECTED):
     #     print("MQTT connection successful!")
-            
+
     #     if device.set_mqtt_pubsub("test_tx", "test_rx") == None:
     #         print("MQTT pubsub failed!")
-        
 
     device.invoke = -1
     i = 30
 
     while True:
-        print(device.mqtt_pubsub)
+        # print(device.wifi)
+        # print(device.mqtt)
+        # print(device.info)
+        # print(device.model)
         device.tscore = i
         device.tiou = i
         i = i + 1

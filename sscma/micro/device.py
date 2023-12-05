@@ -10,6 +10,8 @@ from .const import *
 from .client import Client
 from .modelinfo import ModelInfo
 from .deviceinfo import DeviceInfo
+from .wifiinfo import WiFiInfo
+from .mqttinfo import MQTTInfo
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -33,6 +35,8 @@ class Device:
 
         self._info: Optional[DeviceInfo] = None
         self._model: Optional[ModelInfo] = None
+        self._wifi: Optional[WiFiInfo] = None
+        self._mqtt: Optional[MQTTInfo] = None
 
         self._debug = debug
 
@@ -40,7 +44,7 @@ class Device:
         self._log_handler = log_handler
 
         self._font_path = os.path.join(
-            os.path.dirname(__file__), "fonts", "Arial.ttf")
+            os.path.dirname(__file__), "../", "fonts", "Arial.ttf")
 
         self._status = DeviceStatus.UNKNOWN
 
@@ -79,6 +83,8 @@ class Device:
             self._status = DeviceStatus.UNKONWN
             return
 
+        self._wifi = self._fetch_wifi()
+        self._mqtt = self._fetch_mqtt()
         self._model = self._fetch_model()
 
         self._client.set_event_handler(self._event_process)
@@ -108,6 +114,7 @@ class Device:
         """Return True if the device is connected to the MQTT broker."""
         return self._status & DeviceStatus.MQTT_CONNECTED
 
+    @property
     @check_status(DeviceStatus.READY)
     def info(self, *, skip_cache=False) -> DeviceInfo:
 
@@ -117,6 +124,33 @@ class Device:
         self._info = self._fetch_info()
         return self._info
 
+    @property
+    @check_status(DeviceStatus.READY)
+    def wifi(self, *, skip_cache=False) -> WiFiInfo:
+        """
+        Gets the wifi of the device.
+        """
+
+        if self._wifi is not None and not skip_cache:
+            return self._wifi
+
+        self._wifi = self._fetch_wifi()
+        return self._wifi
+
+    @property
+    @check_status(DeviceStatus.READY)
+    def mqtt(self, *, skip_cache=False) -> MQTTInfo:
+        """
+        Gets the mqtt of the device.
+        """
+
+        if self._mqtt is not None and not skip_cache:
+            return self._mqtt
+
+        self._mqtt = self._fetch_mqtt()
+        return self._mqtt
+
+    @property
     @check_status(DeviceStatus.READY)
     def model(self, *, skip_cache=False) -> ModelInfo:
 
@@ -181,11 +215,12 @@ class Device:
 
     @invoke.setter
     @check_status(DeviceStatus.READY)
-    def invoke(self, value):
+    def invoke(self, value, filter=False, show=True):
         """
         Sets the invoke of the device.
         """
-        response = self._client.set(CMD_AT_INVOKE, '{},{}'.format(value, 0))
+        response = self._client.set(CMD_AT_INVOKE, '{},{},{}'.format(
+            value, 1 if filter else 0, 0 if show else 1))
         if response is not None and response["code"] == CMD_OK:
             self._invoke = value
             if value != 0:
@@ -321,26 +356,14 @@ class Device:
         else:
             return None
 
-    @property
-    @check_status(DeviceStatus.READY)
-    def wifi(self):
-        """
-        Gets the wifi of the device.
-        """
-        response = self._client.get(CMD_AT_WIFI)
-        if response is not None and response["code"] == CMD_OK:
-            if response["data"]["joined"] == 1:
-                self._status |= DeviceStatus.WIFI_CONNECTED
-            else:
-                self._status &= ~DeviceStatus.WIFI_CONNECTED
-            return response["data"]
-        else:
-            return None
-
     def _fetch_info(self) -> DeviceInfo:
         """Fetch device info from the device."""
         id = self._client.get(CMD_AT_ID)
         if id is None or id["data"] == "":
+            self._status = DeviceStatus.UNKONWN
+            return None
+        name = self._client.get(CMD_AT_NAME)
+        if name is None or name["data"] == "":
             self._status = DeviceStatus.UNKONWN
             return None
 
@@ -349,23 +372,29 @@ class Device:
             self._status = DeviceStatus.UNKONWN
             return None
 
+        return DeviceInfo(DeviceInfo.construct(id["data"], name["data"], None, version["data"]))
+
+    def _fetch_wifi(self) -> WiFiInfo:
+        """Fetch wifi info from the device."""
         wifi = self._client.get(CMD_AT_WIFI)
         if wifi is not None and wifi["code"] == CMD_OK:
-            if wifi["data"]["joined"] == 1:
+            if wifi["data"]["status"] != WIFI_NO_JOINED:
                 self._status |= DeviceStatus.WIFI_CONNECTED
             else:
                 self._status &= ~DeviceStatus.WIFI_CONNECTED
-            return wifi["data"]
+        return WiFiInfo(wifi["data"])
 
-        mqtt = self._client.get(CMD_AT_MQTTSERVER)
-        if mqtt is not None and mqtt["code"] == CMD_OK:
-            if mqtt["data"]["connected"] == 1:
+    def _fetch_mqtt(self) -> MQTTInfo:
+        """Fetch mqtt info from the device."""
+        server = self._client.get(CMD_AT_MQTTSERVER)
+        if server is not None and server["code"] == CMD_OK:
+            if server["data"]["status"] != MQTT_NO_CONNECTED:
                 self._status |= DeviceStatus.MQTT_CONNECTED
             else:
                 self._status &= ~DeviceStatus.MQTT_CONNECTED
-            return mqtt["data"]
+        pubsub = self._client.get(CMD_AT_MQTTPUBSUB)
 
-        return DeviceInfo(DeviceInfo.construct(id=id["data"], token=None, version=version["data"], wifi=wifi["data"]))
+        return MQTTInfo(MQTTInfo.construct(server["data"], pubsub["data"]))
 
     def _fetch_model(self) -> ModelInfo:
         """Fetch model info from the device."""
@@ -482,7 +511,7 @@ class Device:
 
         try:
             if EVENT_WIFI in event["name"]:
-                if event["code"] == CMD_OK and event["data"]["joined"] == 1:
+                if event["code"] == CMD_OK and event["data"]["status"] != WIFI_NO_JOINED:
                     self._status |= DeviceStatus.WIFI_CONNECTED
                 else:
                     self._status &= ~DeviceStatus.WIFI_CONNECTED
@@ -492,7 +521,7 @@ class Device:
 
             if EVENT_MQTT in event["name"]:
 
-                if event["code"] == CMD_OK and event["data"]["connected"] == 1:
+                if event["code"] == CMD_OK and event["data"]["status"] != MQTT_NO_CONNECTED:
                     self._status |= DeviceStatus.MQTT_CONNECTED
                 else:
                     self._status &= ~DeviceStatus.MQTT_CONNECTED
