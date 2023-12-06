@@ -7,7 +7,7 @@ import time
 import logging
 import signal
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.ERROR)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -23,8 +23,8 @@ def recieve_thread(serial_port, client):
 
 
 def monitor_handler(image, msg):
-    # if image != None:
-    #     image.show()
+    if image != None:
+        image.show()
     print(msg)
 
 
@@ -42,13 +42,13 @@ def main():
     threading.Thread(target=recieve_thread, args=(
         serial_port, client)).start()
 
-    time.sleep(1)
+    time.sleep(0.2)
 
     device = Device(client, monitor_handler=monitor_handler, debug=1)
 
     print(device.info)
 
-    device.set_wifi("Eureka", "xxxxxxxx")
+    device.set_wifi("airController", "xxxxxxxx")
 
     # while (device.status & DeviceStatus.WIFI_CONNECTTING != DeviceStatus.WIFI_CONNECTTING):
     #     print("Waiting for network connection...")
@@ -57,7 +57,7 @@ def main():
     # if (device.status & DeviceStatus.WIFI_CONNECTED == DeviceStatus.WIFI_CONNECTED):
     #     print("Network connection successful!")
 
-    #     device.set_mqtt_server("192.168.6.162", "seeed", "xiao")
+    device.set_mqtt_server("192.168.6.162", 1883, "seeed", "xiao")
 
     #     while (device.status & DeviceStatus.MQTT_CONNECTTING == DeviceStatus.MQTT_CONNECTTING):
     #         print("Waiting for MQTT connection...")
@@ -66,22 +66,19 @@ def main():
     # if (device.status & DeviceStatus.MQTT_CONNECTED == DeviceStatus.MQTT_CONNECTED):
     #     print("MQTT connection successful!")
 
-    #     if device.set_mqtt_pubsub("test_tx", "test_rx") == None:
-    #         print("MQTT pubsub failed!")
-
-    device.invoke = -1
+    # device.invoke = -1
     i = 30
 
     while True:
-        # print(device.wifi)
-        # print(device.mqtt)
-        # print(device.info)
-        # print(device.model)
-        device.tscore = i
-        device.tiou = i
-        i = i + 1
-        if i > 100:
-            i = 30
+        print(device.wifi)
+        print(device.mqtt)
+        print(device.info)
+        print(device.model)
+        # device.tscore = i
+        # device.tiou = i
+        # i = i + 1
+        # if i > 100:
+        #     i = 30
 
         time.sleep(2)
 

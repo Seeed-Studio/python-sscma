@@ -80,8 +80,11 @@ class Device:
 
         self._info = self._fetch_info()
         if self._info is None:
-            self._status = DeviceStatus.UNKONWN
+            self._status = DeviceStatus.UNKNOWN
             return
+
+        self._wifi_changed = False
+        self._mqtt_changed = False
 
         self._wifi = self._fetch_wifi()
         self._mqtt = self._fetch_mqtt()
@@ -131,7 +134,7 @@ class Device:
         Gets the wifi of the device.
         """
 
-        if self._wifi is not None and not skip_cache:
+        if self._wifi is not None and not skip_cache and not self._wifi_changed:
             return self._wifi
 
         self._wifi = self._fetch_wifi()
@@ -144,7 +147,7 @@ class Device:
         Gets the mqtt of the device.
         """
 
-        if self._mqtt is not None and not skip_cache:
+        if self._mqtt is not None and not skip_cache and not self._mqtt_changed:
             return self._mqtt
 
         self._mqtt = self._fetch_mqtt()
@@ -283,6 +286,7 @@ class Device:
         """
         Sets the wifi of the device.
         """
+        self._wifi_changed = True
         response = self._client.set(
             CMD_AT_WIFI, '"{}",{},"{}"'.format(ssid, enc, password))
         if response is not None and response["code"] == CMD_OK:
@@ -292,7 +296,7 @@ class Device:
             return None
 
     @check_status(DeviceStatus.READY)
-    def set_mqtt_server(self, address, user, password, client_id="", ssl=0):
+    def set_mqtt_server(self, address, port=1883, user="", password="", client_id="", ssl=0):
         """
         Sets the mqtt of the device.
 
@@ -302,74 +306,30 @@ class Device:
         - password: mqtt broker password.
         - ssl: whether to use ssl.
         """
+        self._mqtt_changed = True
+        
         response = self._client.set(
-            CMD_AT_MQTTSERVER, '"{}","{}","{}","{}",{}'.format(client_id, address, user, password, ssl))
+            CMD_AT_MQTTSERVER, '"{}","{}",{},"{}","{}",{}'.format(client_id, address, port, user, password, ssl))
         if response is not None and response["code"] == CMD_OK:
             self._status |= DeviceStatus.MQTT_CONNECTTING
             return response["data"]
         else:
             return None
 
-    @check_status(DeviceStatus.READY)
-    def set_mqtt_pubsub(self, pub="", sub="", pub_qos=0, sub_qos=0):
-        """
-        Sets the mqtt pub sub of the device.
-
-        Args:
-        pub: The pub to set the mqtt pub sub to.
-        sub: The sub to set the mqtt pub sub to.
-        pub_qos: The pub qos to set the mqtt pub sub to.
-        sub_qos: The sub qos to set the mqtt pub sub to.
-        """
-        response = self._client.set(CMD_AT_MQTTPUBSUB, '"{}",{},"{}",{}'.format(
-            pub, pub_qos, sub, sub_qos))
-        if response is not None and response["code"] == CMD_OK:
-            return response["data"]
-        else:
-            return None
-
-    @property
-    @check_status(DeviceStatus.READY)
-    def mqtt_server(self):
-        """
-        Gets the mqtt server of the device.
-        """
-        response = self._client.get(CMD_AT_MQTTSERVER)
-        if response is not None and response["code"] == CMD_OK:
-            if response["data"]["connected"] == 1:
-                self._status |= DeviceStatus.MQTT_CONNECTED
-            else:
-                self._status &= ~DeviceStatus.MQTT_CONNECTED
-            return response["data"]
-        else:
-            return None
-
-    @property
-    @check_status(DeviceStatus.READY)
-    def mqtt_pubsub(self):
-        """
-        Gets the mqtt pubsub of the device.
-        """
-        response = self._client.get(CMD_AT_MQTTPUBSUB)
-        if response is not None and response["code"] == CMD_OK:
-            return response["data"]
-        else:
-            return None
-
     def _fetch_info(self) -> DeviceInfo:
         """Fetch device info from the device."""
-        id = self._client.get(CMD_AT_ID)
+        id = self._client.get(CMD_AT_ID, 2)
         if id is None or id["data"] == "":
-            self._status = DeviceStatus.UNKONWN
+            self._status = DeviceStatus.UNKNOWN
             return None
-        name = self._client.get(CMD_AT_NAME)
+        name = self._client.get(CMD_AT_NAME, 2)
         if name is None or name["data"] == "":
-            self._status = DeviceStatus.UNKONWN
+            self._status = DeviceStatus.UNKNOWN
             return None
 
-        version = self._client.get(CMD_AT_VERSION)
+        version = self._client.get(CMD_AT_VERSION, 2)
         if version is None or version["data"] == "":
-            self._status = DeviceStatus.UNKONWN
+            self._status = DeviceStatus.UNKNOWN
             return None
 
         return DeviceInfo(DeviceInfo.construct(id["data"], name["data"], None, version["data"]))
@@ -382,6 +342,7 @@ class Device:
                 self._status |= DeviceStatus.WIFI_CONNECTED
             else:
                 self._status &= ~DeviceStatus.WIFI_CONNECTED
+        self._wifi_changed = False
         return WiFiInfo(wifi["data"])
 
     def _fetch_mqtt(self) -> MQTTInfo:
@@ -393,7 +354,7 @@ class Device:
             else:
                 self._status &= ~DeviceStatus.MQTT_CONNECTED
         pubsub = self._client.get(CMD_AT_MQTTPUBSUB)
-
+        self._mqtt_changed = False
         return MQTTInfo(MQTTInfo.construct(server["data"], pubsub["data"]))
 
     def _fetch_model(self) -> ModelInfo:
@@ -405,7 +366,7 @@ class Device:
         try:
             model = json.loads(base64.b64decode(response["data"]["info"]))
         except Exception as ex:
-            self._status = DeviceStatus.UNKONWN
+            self._status = DeviceStatus.UNKNOWN
             _LOGGER.error("fetch model exception:{}".format(ex))
             return None
 
@@ -573,7 +534,7 @@ class Device:
 
         except Exception as ex:
 
-            self._status = DeviceStatus.UNKONWN
+            self._status = DeviceStatus.UNKNOWN
             _LOGGER.error("event process exception:{}".format(ex))
 
         return

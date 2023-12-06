@@ -177,7 +177,7 @@ class Client:
         Returns:
         - response: response received from the device.
         """
-
+    
         if tag:
             command = "{}{}@{}={}".format(CMD_PREFIX,
                                           self._generate_tag(), command, value)
@@ -272,8 +272,18 @@ class Client:
                         self._event_handler(paylod)
 
                 if "type" in paylod and paylod["type"] == CMD_TYPE_LOG:
-                    if self._log_handler is not None:
-                        self._log_handler(paylod)
+                    if "name" in paylod:
+                        if paylod["name"] == LOG_AT:
+                            for listener in self._listeners:
+                                if listener.name in paylod["data"]:
+                                    listener.response = paylod
+                                    listener.event.set()
+                                    if self._debug:
+                                        _LOGGER.debug(
+                                            "response:{}".format(paylod))
+                        if paylod["name"] == LOG_LOG:
+                            if self._log_handler is not None:
+                                self._log_handler(paylod)
 
             except Exception as ex:
                 if (self._debug):

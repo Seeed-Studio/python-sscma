@@ -82,6 +82,10 @@ EVENT_WIFI: Final[str] = "WIFI"
 EVENT_MQTT: Final[str] = "MQTT"
 EVENT_SUPERVISOR: Final[str] = "SUPERVISOR"
 
+# log constants
+LOG_AT: Final[str] = "AT"
+LOG_LOG: Final[str] = "LOG"
+
 
 class DeviceStatus(IntFlag):
     """Device status flags."""
