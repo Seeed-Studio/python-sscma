@@ -177,7 +177,7 @@ class Client:
         Returns:
         - response: response received from the device.
         """
-    
+
         if tag:
             command = "{}{}@{}={}".format(CMD_PREFIX,
                                           self._generate_tag(), command, value)
@@ -255,7 +255,7 @@ class Client:
         for match in matches:
             try:
                 paylod = json.loads(match.decode('utf-8'))
-
+                _LOGGER.debug("payload:{}".format(paylod))
                 # response frame
                 if "type" in paylod and paylod["type"] == CMD_TYPE_RESPONSE:
                     if "name" in paylod:
