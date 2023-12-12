@@ -6,8 +6,11 @@ import threading
 import time
 import logging
 import signal
+import cv2
+import base64
+import numpy as np
 
-logging.basicConfig(level=logging.ERROR)
+logging.basicConfig(level=logging.DEBUG)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -22,9 +25,20 @@ def recieve_thread(serial_port, client):
                 client.recieve_handler(msg)
 
 
-def monitor_handler(image, msg):
-    if image != None:
-        image.show()
+def monitor_handler(msg):
+    if "image" in msg:
+        jpeg_bytes = base64.b64decode(msg["image"])
+
+        # Convert the bytes into a numpy array
+        nparr = np.frombuffer(jpeg_bytes, np.uint8)
+
+        # Decode the image array using OpenCV
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+        # Display the image
+        cv2.imshow('Base64 Image', img)
+        cv2.waitKey(1)
+        msg.pop("image")
     print(msg)
 
 
@@ -37,43 +51,28 @@ def signal_handler(signal, frame):
 
 def main():
     signal.signal(signal.SIGINT, signal_handler)
-    serial_port = serial.Serial("COM77", 921600, timeout=0.1)
+    serial_port = serial.Serial("COM45", 921600, timeout=0.1)
     client = Client(lambda msg: serial_port.write(msg), debug=1)
     threading.Thread(target=recieve_thread, args=(
         serial_port, client)).start()
 
     time.sleep(0.2)
 
-    device = Device(client, monitor_handler=monitor_handler, debug=1)
+    device = Device(client, debug=1)
+
+    device.on_monitor = monitor_handler
 
     print(device.info)
 
-    device.set_wifi("airController", "xxxxxxxx")
 
-    # while (device.status & DeviceStatus.WIFI_CONNECTTING != DeviceStatus.WIFI_CONNECTTING):
-    #     print("Waiting for network connection...")
-    #     time.sleep(1)
-
-    # if (device.status & DeviceStatus.WIFI_CONNECTED == DeviceStatus.WIFI_CONNECTED):
-    #     print("Network connection successful!")
-
-    device.set_mqtt_server("192.168.6.162", 1883, "seeed", "xiao")
-
-    #     while (device.status & DeviceStatus.MQTT_CONNECTTING == DeviceStatus.MQTT_CONNECTTING):
-    #         print("Waiting for MQTT connection...")
-    #         time.sleep(1)
-
-    # if (device.status & DeviceStatus.MQTT_CONNECTED == DeviceStatus.MQTT_CONNECTED):
-    #     print("MQTT connection successful!")
-
-    # device.invoke = -1
+    device.invoke(-1)
     i = 30
 
     while True:
-        print(device.wifi)
-        print(device.mqtt)
-        print(device.info)
-        print(device.model)
+        # print(device.wifi)
+        # print(device.mqtt)
+        # print(device.info)
+        # print(device.model)
         # device.tscore = i
         # device.tiou = i
         # i = i + 1

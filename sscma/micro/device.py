@@ -12,6 +12,7 @@ from .modelinfo import ModelInfo
 from .deviceinfo import DeviceInfo
 from .wifiinfo import WiFiInfo
 from .mqttinfo import MQTTInfo
+from threading import Timer
 
 import traceback
 
@@ -29,6 +30,7 @@ class Device:
     def __init__(self,
                  client: Client = None,
                  debug: int = 0,
+                 timeout: int = 5,
                  ) -> None:
 
         self._client = client
@@ -52,6 +54,13 @@ class Device:
         self.on_monitor = None
         self.on_log = None
 
+        self._wifi_changed = False
+        self._mqtt_changed = False
+        
+        self._timeout = timeout
+
+        self._timer = None
+
         self.initialize()
 
     def check_status(status):
@@ -59,13 +68,10 @@ class Device:
 
         def decorator(func):
             def wrapper(self, *args, **kwargs):
-                _LOGGER.debug("Device status:{} & {}".format(
-                    self._status, status))
-
-                if ((status & DeviceStatus.READY) == DeviceStatus.READY) and not (self._status & DeviceStatus.READY) == DeviceStatus.READY:
-                    _LOGGER.debug("Device status is not ready:{} & {}".format(
-                        self._status, status))
-                    self.initialize()
+                # if ((status & DeviceStatus.READY) == DeviceStatus.READY) and not (self._status & DeviceStatus.READY) == DeviceStatus.READY:
+                #     _LOGGER.debug("Device status is not ready:{} & {}".format(
+                #         self._status, status))
+                #     self.initialize()
                 if not (self._status & status) == status:
                     _LOGGER.debug("Device status is not satisfied:{} & {}".format(
                         self._status, status))
@@ -82,27 +88,26 @@ class Device:
         if self._status & DeviceStatus.READY:
             return
 
-        print("Device initialize...")
-
         self.Break()
 
-        print("Device reset...")
         self._info = self._fetch_info()
         if self._info is None:
             self._status = DeviceStatus.UNKNOWN
+            self._timer = Timer(self._timeout, self.initialize)
+            self._timer.start()
             return
-
-        self._wifi_changed = False
-        self._mqtt_changed = False
-
-        # self._wifi = self._fetch_wifi()
-        # self._mqtt = self._fetch_mqtt()
-        # self._model = self._fetch_model()
 
         self._client.set_event_handler(self._event_process)
         self._client.set_log_handler(self._log_process)
 
+        self._wifi = self._fetch_wifi()
+        self._mqtt = self._fetch_mqtt()
+        self._model = self._fetch_model()
+
         self._status |= DeviceStatus.READY
+
+        if self.on_connect is not None:
+            self.on_connect(self._info)
 
         return self._status
 
@@ -143,7 +148,7 @@ class Device:
         Gets the wifi of the device.
         """
 
-        if self._wifi is not None and not skip_cache and not self._wifi_changed:
+        if self._wifi is not None and not skip_cache and not self._wifi_changed and self._status & DeviceStatus.WIFI_CONNECTED:
             return self._wifi
 
         self._wifi = self._fetch_wifi()
@@ -156,7 +161,7 @@ class Device:
         Gets the mqtt of the device.
         """
 
-        if self._mqtt is not None and not skip_cache and not self._mqtt_changed:
+        if self._mqtt is not None and not skip_cache and not self._mqtt_changed and self._status & DeviceStatus.MQTT_CONNECTED:
             return self._mqtt
 
         self._mqtt = self._fetch_mqtt()
@@ -226,7 +231,7 @@ class Device:
         else:
             return None
 
-    @invoke.setter
+
     @check_status(DeviceStatus.READY)
     def invoke(self, value, filter=False, show=True):
         """
@@ -330,16 +335,16 @@ class Device:
 
     def _fetch_info(self) -> DeviceInfo:
         """Fetch device info from the device."""
-        id = self._client.get(CMD_AT_ID, 0.5)
+        id = self._client.get(CMD_AT_ID, timeout=0.5)
         if id is None or id["data"] == "":
             self._status = DeviceStatus.UNKNOWN
             return None
-        name = self._client.get(CMD_AT_NAME, 2)
+        name = self._client.get(CMD_AT_NAME)
         if name is None or name["data"] == "":
             self._status = DeviceStatus.UNKNOWN
             return None
 
-        version = self._client.get(CMD_AT_VERSION, 2)
+        version = self._client.get(CMD_AT_VERSION)
         if version is None or version["data"] == "":
             self._status = DeviceStatus.UNKNOWN
             return None
@@ -350,10 +355,13 @@ class Device:
         """Fetch wifi info from the device."""
         wifi = self._client.get(CMD_AT_WIFI)
         if wifi is not None and wifi["code"] == CMD_OK:
-            if wifi["data"]["status"] != WIFI_NO_JOINED:
+            if wifi["data"]["status"] == WIFI_JOINED:
+                self._status &= ~DeviceStatus.WIFI_CONNECTTING
                 self._status |= DeviceStatus.WIFI_CONNECTED
             else:
                 self._status &= ~DeviceStatus.WIFI_CONNECTED
+                self._status |= DeviceStatus.WIFI_CONNECTTING
+
         self._wifi_changed = False
         return WiFiInfo(wifi["data"])
 
@@ -361,10 +369,12 @@ class Device:
         """Fetch mqtt info from the device."""
         server = self._client.get(CMD_AT_MQTTSERVER)
         if server is not None and server["code"] == CMD_OK:
-            if server["data"]["status"] != MQTT_NO_CONNECTED:
+            if server["data"]["status"] == MQTT_CONNECTED:
+                self._status &= ~DeviceStatus.MQTT_CONNECTTING
                 self._status |= DeviceStatus.MQTT_CONNECTED
             else:
                 self._status &= ~DeviceStatus.MQTT_CONNECTED
+                self._status |= DeviceStatus.MQTT_CONNECTTING
         pubsub = self._client.get(CMD_AT_MQTTPUBSUB)
         self._mqtt_changed = False
         return MQTTInfo(MQTTInfo.construct(server["data"], pubsub["data"]))
@@ -417,9 +427,9 @@ class Device:
                            fill=(*fill_color, int(255 * alpha)))
 
             font = ImageFont.truetype(self._font_path, size=font_size)
-            text_left = (img_w / num_classes) * i
+            text_left = (img_w / num_classes) * i + 5
             text_top = rect_bottom - \
-                font_size if rect_bottom >= font_size else rect_bottom + font_size
+                font_size - 5 if rect_bottom >= font_size else rect_bottom + font_size
             draw.text((text_left, text_top),
                       f"{target_str}: {score}", fill="#ffffff", font=font)
             image.paste(Image.alpha_composite(image, transp))
@@ -498,16 +508,17 @@ class Device:
                 if self._sample == 0:
                     self._status &= ~DeviceStatus.SAMPLING
 
-            if self.on_monitor is not None and "image" in event["data"]:
+            if self.on_monitor is not None:
+                
+                reply = event["data"]
 
                 # draw image
-                if event["data"]["image"] != "":
-
+                if "image" in event["data"] and event["data"]["image"]:
+                    
                     ImageFile.LOAD_TRUNCATED_IMAGES = True
                     image = Image.open(io.BytesIO(
                         base64.b64decode(event["data"]["image"])))
 
-                    reply = event["data"]
 
                     if "classes" in event["data"]:
                         image = self._draw_classes(
@@ -532,6 +543,7 @@ class Device:
                 return
 
         except Exception as ex:
+            traceback.print_exc()
             _LOGGER.error("event process exception:{}".format(ex))
 
         return

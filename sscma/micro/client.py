@@ -184,7 +184,7 @@ class Client:
         else:
             command = "{}{}={}".format(CMD_PREFIX, command, value)
 
-        response = self.send_command(command, wait_event)
+        response = self.send_command(command, wait_event, timeout)
         if response is None:
             return None
         else:
@@ -208,7 +208,7 @@ class Client:
         else:
             command = "{}{}?".format(CMD_PREFIX, command)
 
-        response = self.send_command(command, wait_event)
+        response = self.send_command(command, wait_event, timeout)
         if response is None:
             return None
         else:
@@ -232,7 +232,7 @@ class Client:
         else:
             command = "{}{}".format(CMD_PREFIX, command)
 
-        response = self.send_command(command, wait_event)
+        response = self.send_command(command, wait_event, timeout)
         if response is None:
             return None
         else:
@@ -255,7 +255,6 @@ class Client:
         for match in matches:
             try:
                 paylod = json.loads(match.decode('utf-8'))
-                _LOGGER.debug("payload:{}".format(paylod))
                 # response frame
                 if "type" in paylod and paylod["type"] == CMD_TYPE_RESPONSE:
                     if "name" in paylod:
