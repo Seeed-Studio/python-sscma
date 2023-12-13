@@ -69,15 +69,15 @@ def main():
     i = 30
 
     while True:
-        # print(device.wifi)
-        # print(device.mqtt)
-        # print(device.info)
-        # print(device.model)
-        # device.tscore = i
-        # device.tiou = i
-        # i = i + 1
-        # if i > 100:
-        #     i = 30
+        print(device.wifi)
+        print(device.mqtt)
+        print(device.info)
+        print(device.model)
+        device.tscore = i
+        device.tiou = i
+        i = i + 1
+        if i > 100:
+            i = 30
 
         time.sleep(2)
 

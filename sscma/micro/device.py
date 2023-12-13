@@ -8,10 +8,8 @@ from PIL import Image, ImageDraw, ImageFont, ImageFile
 
 from .const import *
 from .client import Client
-from .modelinfo import ModelInfo
-from .deviceinfo import DeviceInfo
-from .wifiinfo import WiFiInfo
-from .mqttinfo import MQTTInfo
+from .info import DeviceInfo, ModelInfo, WiFiInfo, MQTTInfo
+
 from threading import Timer
 
 import traceback
@@ -56,7 +54,7 @@ class Device:
 
         self._wifi_changed = False
         self._mqtt_changed = False
-        
+
         self._timeout = timeout
 
         self._timer = None
@@ -230,7 +228,6 @@ class Device:
             return response["data"]
         else:
             return None
-
 
     @check_status(DeviceStatus.READY)
     def invoke(self, value, filter=False, show=True):
@@ -444,31 +441,45 @@ class Device:
         image: The image to draw the boxes on.
         boxes: The boxes to draw.
         """
+        
+        if image.mode != "RGBA":
+            image = image.convert("RGBA")
+
+        transp = Image.new('RGBA', image.size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(transp, "RGBA")
 
         img_w, img_h = image.size
-        draw = ImageDraw.Draw(image)
-
+        
         for box in boxes:
             x, y, w, h, score, target = box
 
             target_str = self.model.classes[target] if target < len(
                 self.model.classes) else str(target)
+            alpha = 0.5
             fill_color = COLORS[target % len(COLORS)]
             rect_left = x - w / 2
             rect_right = x + w / 2
             rect_top = y - h / 2
             rect_bottom = y + h / 2
+            rect_left = rect_left > 0 and rect_left or 0
+            rect_right = rect_right < img_w and rect_right or img_w
+            rect_top = rect_top > 0 and rect_top or 0
+            rect_bottom = rect_bottom < img_h and rect_bottom or img_h
             draw.rectangle([rect_left, rect_top, rect_right,
-                           rect_bottom], outline=fill_color,  width=2)
+                           rect_bottom], outline=(*fill_color, int(255 * alpha)),  width=2)
             font_size = int(min(img_w, img_h) / 16)
             font = ImageFont.truetype(self._font_path, int(font_size))
             text_color = "#ffffff"
             text_left = rect_left
             text_top = rect_top - font_size
+            text_top = text_top > 0 and text_top or 0
             draw.rectangle([text_left, text_top, rect_right,
-                           text_top + font_size], fill=fill_color)
-            draw.text((text_left, text_top),
+                           text_top + font_size], fill=(*fill_color, int(255 * alpha)))
+            draw.text((text_left+2, text_top),
                       f"{target_str}: {score}", fill=text_color, font=font)
+            image.paste(Image.alpha_composite(image, transp))
+        
+        image = image.convert("RGB")
 
         return image
 
@@ -509,16 +520,15 @@ class Device:
                     self._status &= ~DeviceStatus.SAMPLING
 
             if self.on_monitor is not None:
-                
+
                 reply = event["data"]
 
                 # draw image
                 if "image" in event["data"] and event["data"]["image"]:
-                    
+
                     ImageFile.LOAD_TRUNCATED_IMAGES = True
                     image = Image.open(io.BytesIO(
                         base64.b64decode(event["data"]["image"])))
-
 
                     if "classes" in event["data"]:
                         image = self._draw_classes(

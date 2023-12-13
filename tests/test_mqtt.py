@@ -20,8 +20,8 @@ _LOGGER = logging.getLogger(__name__)
 
 # 定义代理服务器和主题
 broker_address = "192.168.199.230"
-rx_topic = "sscma/v0/grove_we2_360779f5/tx"
-tx_topic = "sscma/v0/grove_we2_360779f5/rx"
+rx_topic = "sscma/v0/sscma_grove_we2_360779f5/tx"
+tx_topic = "sscma/v0/sscma_grove_we2_360779f5/rx"
 
 # 连接成功时的回调
 
