@@ -3,11 +3,11 @@ import json
 import string
 import random
 import logging
-from threading import Event, Lock
-from typing import Any, List, Optional  # noqa: F401
+import serial
+from threading import Thread, Event, Lock
+from typing import List, Optional  # noqa: F401
 
 from .const import *
-from .exceptions import PayloadDecodeException
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,32 +40,14 @@ class Client:
     Client class for sending and receiving messages to and from a device.
 
     Attributes:
-    - _msg_buffer: The buffer for storing incoming messages.
-    - _listeners: The list of active listeners for events.
-    - _send_handler: The function that sends messages to the device.
-    - _event_handler: The function that handles events received from the device.
-    - _log_handler: The function that handles log messages received from the device.
-    - _timeout: The timeout value for waiting for a response from the device.
-    - _try_count: The number of times to try sending a command to the device.
-    - _debug: The debug level for logging.
     """
-
-    _msg_buffer: bytes = b''
-    _listeners: List[Listener] = []
-
-    _send_handler: Any = None
-    _event_handler: Any = None
-    _log_handler: Any = None
-
     _timeout: int = 10
     _try_count: int = 3
-    _debug: int = 0
 
     def __init__(self,
-                 send_handler=None,
-                 event_handler=None,
-                 log_handler=None,
-                 debug: int = 0,
+                 on_write=None,
+                 on_event=None,
+                 on_log=None,
                  timeout: Optional[int] = None,
                  try_count: Optional[int] = None,
                  ) -> None:
@@ -75,48 +57,30 @@ class Client:
         Args:
         - send_handler: function that sends messages to the device.
         """
-        self._send_handler = send_handler
-        self._event_handler = event_handler
-        self._log_handler = log_handler
+        self.on_write = on_write
+        self.on_event = on_event
+        self.on_log = on_log
 
-        self._timeout = timeout if timeout is not None else self._timeout
-        self._try_count = try_count if try_count is not None else self._try_count
+        self.__timeout = timeout if timeout is not None else self._timeout
+        self.__try_count = try_count if try_count is not None else self._try_count
 
-        self._debug = debug
-        self._msg_buffer = b''
+        self.__msg_buffer = b''
+        self.__listeners: List[Listener] = []
 
-        self.lock = Lock()
+        self.__lock = Lock()
 
-    def set_event_handler(self, event_handler):
+    def __send(self, msg):
         """
-        Sets the event handler function for the Client class.
-
-        Args:
-        - event_handler: function that handles events received from the device.
-        """
-        self._event_handler = event_handler
-
-    def set_log_handler(self, log_handler):
-        """
-        Sets the log handler function for the Client class.
-
-        Args:
-        - log_handler: function that handles log messages received from the device.
-        """
-        self._log_handler = log_handler
-
-    def _send(self, msg):
-        """
-        Sends a message to the device using the send_handler function.
+        Sends a message to the device using the on_write function.
 
         Args:
         - msg: message to be sent to the device.
         """
-        with self.lock:
-            if self._send_handler is not None:
-                self._send_handler(msg)
+        with self.__lock:
+            if self.on_write is not None:
+                self.on_write(msg)
 
-    def _generate_tag(self):
+    def __generate_tag(self):
         """
         Generates a random tag for a message.
 
@@ -140,24 +104,23 @@ class Client:
         """
         listener = Listener(command, Event(), None)
 
-        for i in range(self._try_count):
-            if self._debug:
-                _LOGGER.info(
-                    "send_command:{} try:{}/{}".format(command, i+1, self._try_count))
+        for i in range(self.__try_count):
+            _LOGGER.debug(
+                "send_command:{} try:{}/{}".format(command, i+1, self.__try_count))
 
             if wait_event:
                 listener.event.clear()
-                self._listeners.append(listener)
+                self.__listeners.append(listener)
 
-            self._send('{}\r\n'.format(command).encode('utf-8'))
+            self.__send('{}\r\n'.format(command).encode('utf-8'))
 
             if wait_event:
                 if timeout is not None:
                     listener.event.wait(timeout)
                 else:
-                    listener.event.wait(self._timeout)
+                    listener.event.wait(self.__timeout)
                 # remove listener
-                self._listeners.remove(listener)
+                self.__listeners.remove(listener)
 
             if not wait_event or listener.response is not None:
                 break
@@ -180,7 +143,7 @@ class Client:
 
         if tag:
             command = "{}{}@{}={}".format(CMD_PREFIX,
-                                          self._generate_tag(), command, value)
+                                          self.__generate_tag(), command, value)
         else:
             command = "{}{}={}".format(CMD_PREFIX, command, value)
 
@@ -204,7 +167,7 @@ class Client:
         """
         if tag:
             command = "{}{}@{}?".format(CMD_PREFIX,
-                                        self._generate_tag(), command)
+                                        self.__generate_tag(), command)
         else:
             command = "{}{}?".format(CMD_PREFIX, command)
 
@@ -228,7 +191,7 @@ class Client:
         """
         if tag:
             command = "{}{}@{}".format(CMD_PREFIX,
-                                       self._generate_tag(), command)
+                                       self.__generate_tag(), command)
         else:
             command = "{}{}".format(CMD_PREFIX, command)
 
@@ -238,16 +201,25 @@ class Client:
         else:
             return response
 
-    def recieve_handler(self, msg):
+    def on_recieve(self, msg):
         """
         Handles messages received from the device
 
         Args:
         - msg: message received from the device.
         """
-        self._msg_buffer += msg
+        self._recieve_handler(msg)
 
-        matches = re.findall(b'\r{.*}\n', self._msg_buffer)
+    def _recieve_handler(self, msg):
+        """
+        Handles messages received from the device
+
+        Args:
+        - msg: message received from the device.
+        """
+        self.__msg_buffer += msg
+
+        matches = re.findall(b'\r{.*}\n', self.__msg_buffer)
 
         if matches is None or len(matches) == 0:
             return
@@ -258,36 +230,63 @@ class Client:
                 # response frame
                 if "type" in paylod and paylod["type"] == CMD_TYPE_RESPONSE:
                     if "name" in paylod:
-                        for listener in self._listeners:
+                        for listener in self.__listeners:
                             if listener.name == paylod["name"]:
                                 listener.response = paylod
                                 listener.event.set()
-                                if self._debug:
-                                    _LOGGER.info(
-                                        "response:{}".format(paylod))
+                                _LOGGER.debug(
+                                    "response:{}".format(paylod))
 
                 if "type" in paylod and paylod["type"] == CMD_TYPE_EVENT:
-                    if self._event_handler is not None:
-                        self._event_handler(paylod)
+                    if self.on_event is not None:
+                        self.on_event(paylod)
 
                 if "type" in paylod and paylod["type"] == CMD_TYPE_LOG:
                     if "name" in paylod:
                         if paylod["name"] == LOG_AT:
-                            for listener in self._listeners:
+                            for listener in self.__listeners:
                                 if listener.name in paylod["data"]:
                                     listener.response = paylod
                                     listener.event.set()
-                                    if self._debug:
-                                        _LOGGER.info(
-                                            "response:{}".format(paylod))
+                                    _LOGGER.debug(
+                                        "response:{}".format(paylod))
                         if paylod["name"] == LOG_LOG:
-                            if self._log_handler is not None:
-                                self._log_handler(paylod)
+                            if self.on_log is not None:
+                                self.on_log(paylod)
 
             except Exception as ex:
-                if (self._debug):
-                    _LOGGER.error("payload decode exception:{}".format(ex))
+                _LOGGER.error("payload decode exception:{}".format(ex))
 
             finally:
-                self._msg_buffer = self._msg_buffer[self._msg_buffer.find(
+                self.__msg_buffer = self.__msg_buffer[self.__msg_buffer.find(
                     RESPONSE_SUFFIX)+2:]
+
+
+class SerialClient(Client):
+    def __init__(self, port, baudrate=921600, timeout=0.1, **kwargs):
+        self.__serial = serial.Serial(port, baudrate, timeout=timeout)
+        self.__running = False
+        self.__thread = None
+        super().__init__(self.__serial.write, **kwargs)
+
+    def _recieve_thread(self):
+        while self.__running:
+            if self.__serial.in_waiting:
+                msg = self.__serial.read(self.__serial.in_waiting)
+                if msg != b'':
+                    self._recieve_handler(msg)
+
+    def loop_start(self):
+        if not self.__running:
+            self.__running = True
+            self.__thread = Thread(
+                target=self._recieve_thread)
+            self.__thread.start()
+
+    def loop_stop(self):
+        if self.__running:
+            self.__running = False
+            self.__thread.join()
+            self.__thread = None
+
+

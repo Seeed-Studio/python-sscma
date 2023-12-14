@@ -22,7 +22,7 @@ def recieve_thread(serial_port, client):
         if serial_port.in_waiting:
             msg = serial_port.read(serial_port.in_waiting)
             if msg != b'':
-                client.recieve_handler(msg)
+                client.on_recieve(msg)
 
 
 def monitor_handler(msg):
@@ -44,10 +44,11 @@ def monitor_handler(msg):
 
 def on_device_connect(device):
     print("device connected")
-    device.invoke(-1, False ,True)
+    device.invoke(-1, False, True)
     device.tscore = 70
     device.tiou = 70
-    
+
+
 def signal_handler(signal, frame):
     print("Ctrl+C pressed!")
     global recieve_thread_running
@@ -57,8 +58,8 @@ def signal_handler(signal, frame):
 
 def main():
     signal.signal(signal.SIGINT, signal_handler)
-    serial_port = serial.Serial("COM45", 921600, timeout=0.1)
-    client = Client(lambda msg: serial_port.write(msg), debug=1)
+    serial_port = serial.Serial("COM83", 921600, timeout=0.1)
+    client = Client(lambda msg: serial_port.write(msg))
     threading.Thread(target=recieve_thread, args=(
         serial_port, client)).start()
 
@@ -68,11 +69,10 @@ def main():
 
     device.on_monitor = monitor_handler
     device.on_connect = on_device_connect
-    
+
     device.loop_start()
 
     print(device.info)
-
 
     i = 60
 

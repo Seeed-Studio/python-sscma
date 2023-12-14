@@ -28,8 +28,10 @@ def on_connect(client, userdata, flags, rc):
     print("Connected with result code "+str(rc))
     client.subscribe(rx_topic)
 
+
 def on_message(client, tclient, msg):
-    tclient.recieve_handler(msg.payload)
+    tclient.on_recieve(msg.payload)
+
 
 def monitor_handler(msg):
 
@@ -46,13 +48,13 @@ def monitor_handler(msg):
         cv2.imshow('Base64 Image', img)
         cv2.waitKey(1)
         msg.pop("image")
-        
+
     print(msg)
-    
-    
+
+
 def on_device_connect(device):
     print("device connected")
-    device.invoke(-1, False ,True)
+    device.invoke(-1, False, True)
     device.tscore = 70
     device.tiou = 70
 
@@ -70,15 +72,15 @@ def main():
     # 保持连接
     client.loop_start()
 
-    tclient = Client(lambda msg: client.publish(tx_topic, msg), debug=1)
+    tclient = Client(lambda msg: client.publish(tx_topic, msg))
 
     client.user_data_set(tclient)
 
-    device = Device(tclient, debug=1)
+    device = Device(tclient)
     device.on_monitor = monitor_handler
     device.on_connect = on_device_connect
     device.loop_start()
-    
+
     i = 60
     while True:
         print("model:{}".format(device.model))
