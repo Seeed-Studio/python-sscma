@@ -58,8 +58,7 @@ class Device:
         self._timeout = timeout
 
         self._timer = None
-
-        self.initialize()
+        
 
     def check_status(status):
         """Decorator to check if the device is ready."""
@@ -67,11 +66,11 @@ class Device:
         def decorator(func):
             def wrapper(self, *args, **kwargs):
                 # if ((status & DeviceStatus.READY) == DeviceStatus.READY) and not (self._status & DeviceStatus.READY) == DeviceStatus.READY:
-                #     _LOGGER.debug("Device status is not ready:{} & {}".format(
+                #     _LOGGER.info("Device status is not ready:{} & {}".format(
                 #         self._status, status))
                 #     self.initialize()
                 if not (self._status & status) == status:
-                    _LOGGER.debug("Device status is not satisfied:{} & {}".format(
+                    _LOGGER.info("Device status is not satisfied:{} & {}".format(
                         self._status, status))
                     return None  # Or raise an exception or handle as needed
 
@@ -80,6 +79,10 @@ class Device:
             return wrapper
 
         return decorator
+    
+    def loop_start(self):
+        """Start the device loop."""
+        self.initialize()
 
     def initialize(self):
         """Initialize the device."""
@@ -103,9 +106,12 @@ class Device:
         self._model = self._fetch_model()
 
         self._status |= DeviceStatus.READY
+        
+        _LOGGER.info("device connected:{}".format(self._info))
 
         if self.on_connect is not None:
-            self.on_connect(self._info)
+            _LOGGER.info("device connected:{}".format(self._info))
+            self.on_connect(self)
 
         return self._status
 
@@ -378,7 +384,6 @@ class Device:
 
     def _fetch_model(self) -> ModelInfo:
         """Fetch model info from the device."""
-        _LOGGER.debug("fetch model")
         response = self._client.get(CMD_AT_INFO)
 
         if response is None or response["data"]["info"] == "":
@@ -547,7 +552,7 @@ class Device:
                     base64_image = base64.b64encode(
                         buf.getvalue()).decode('utf-8')
                     reply["image"] = base64_image
-
+                    
                 self.on_monitor(reply)
 
                 return

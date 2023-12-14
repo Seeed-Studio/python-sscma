@@ -20,22 +20,16 @@ _LOGGER = logging.getLogger(__name__)
 
 # 定义代理服务器和主题
 broker_address = "192.168.199.230"
-rx_topic = "sscma/v0/sscma_grove_we2_360779f5/tx"
-tx_topic = "sscma/v0/sscma_grove_we2_360779f5/rx"
-
-# 连接成功时的回调
+rx_topic = "sscma/v0/grove_vision_ai_we2_360779f5/tx"
+tx_topic = "sscma/v0/grove_vision_ai_we2_360779f5/rx"
 
 
 def on_connect(client, userdata, flags, rc):
     print("Connected with result code "+str(rc))
     client.subscribe(rx_topic)
 
-# 收到消息时的回调
-
-
 def on_message(client, tclient, msg):
     tclient.recieve_handler(msg.payload)
-
 
 def monitor_handler(msg):
 
@@ -54,6 +48,13 @@ def monitor_handler(msg):
         msg.pop("image")
         
     print(msg)
+    
+    
+def on_device_connect(device):
+    print("device connected")
+    device.invoke(-1, False ,True)
+    device.tscore = 70
+    device.tiou = 70
 
 
 def main():
@@ -75,14 +76,11 @@ def main():
 
     device = Device(tclient, debug=1)
     device.on_monitor = monitor_handler
-
+    device.on_connect = on_device_connect
+    device.loop_start()
     
     i = 60
     while True:
-        if not device.status & DeviceStatus.INVOKING:
-            print("Waiting for invoke...")
-            device.invoke(-1, False ,True)
-            device.tscore = 70
         print("model:{}".format(device.model))
         # device.tscore = i
         # device.tiou = i

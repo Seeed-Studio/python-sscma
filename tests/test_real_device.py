@@ -42,6 +42,12 @@ def monitor_handler(msg):
     print(msg)
 
 
+def on_device_connect(device):
+    print("device connected")
+    device.invoke(-1, False ,True)
+    device.tscore = 70
+    device.tiou = 70
+    
 def signal_handler(signal, frame):
     print("Ctrl+C pressed!")
     global recieve_thread_running
@@ -61,12 +67,14 @@ def main():
     device = Device(client, debug=1)
 
     device.on_monitor = monitor_handler
+    device.on_connect = on_device_connect
+    
+    device.loop_start()
 
     print(device.info)
 
 
-    device.invoke(-1)
-    i = 30
+    i = 60
 
     while True:
         print(device.wifi)

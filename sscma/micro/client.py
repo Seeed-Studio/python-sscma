@@ -142,7 +142,7 @@ class Client:
 
         for i in range(self._try_count):
             if self._debug:
-                _LOGGER.debug(
+                _LOGGER.info(
                     "send_command:{} try:{}/{}".format(command, i+1, self._try_count))
 
             if wait_event:
@@ -263,7 +263,7 @@ class Client:
                                 listener.response = paylod
                                 listener.event.set()
                                 if self._debug:
-                                    _LOGGER.debug(
+                                    _LOGGER.info(
                                         "response:{}".format(paylod))
 
                 if "type" in paylod and paylod["type"] == CMD_TYPE_EVENT:
@@ -278,7 +278,7 @@ class Client:
                                     listener.response = paylod
                                     listener.event.set()
                                     if self._debug:
-                                        _LOGGER.debug(
+                                        _LOGGER.info(
                                             "response:{}".format(paylod))
                         if paylod["name"] == LOG_LOG:
                             if self._log_handler is not None:
