@@ -3,8 +3,7 @@ import json
 import string
 import random
 import logging
-import serial
-from threading import Thread, Event, Lock
+from threading import Thread, Event, Lock, current_thread
 from typing import List, Optional  # noqa: F401
 
 from .const import *
@@ -23,11 +22,22 @@ class Listener:
     """
 
     def __init__(self, command, event, response=None):
+        """
+        Initializes a Listener object.
+
+        Args:
+        - command: The command associated with the listener.
+        - event: The event object associated with the listener.
+        - response: The response received from the device.
+        """
         self.name = command[3:].split("=")[0]
         self.event = event
         self.response = response
 
     def __repr__(self):
+        """
+        Returns a string representation of the Listener object.
+        """
         return "Listener(name={}, event={}, response={})".format(
             self.name,
             self.event,
@@ -40,7 +50,13 @@ class Client:
     Client class for sending and receiving messages to and from a device.
 
     Attributes:
+    - on_write: Function that is called when a message is sent to the device.
+    - on_event: Function that is called when an event is triggered.
+    - on_log: Function that is called for logging purposes.
+    - timeout: Timeout value for waiting for a response from the device.
+    - try_count: Number of times to try sending a command to the device.
     """
+
     _timeout: int = 10
     _try_count: int = 3
 
@@ -52,40 +68,95 @@ class Client:
                  try_count: Optional[int] = None,
                  ) -> None:
         """
-        Initializes the Client class with a send_handler function.
+        Initializes the Client class.
 
         Args:
-        - send_handler: function that sends messages to the device.
+        - on_write: Function that is called when a message is sent to the device.
+        - on_event: Function that is called when an event is triggered.
+        - on_log: Function that is called for logging purposes.
+        - timeout: Timeout value for waiting for a response from the device.
+        - try_count: Number of times to try sending a command to the device.
         """
-        self.on_write = on_write
-        self.on_event = on_event
-        self.on_log = on_log
+        self._on_write = on_write
+        self._on_event = on_event
+        self._on_log = on_log
 
-        self.__timeout = timeout if timeout is not None else self._timeout
-        self.__try_count = try_count if try_count is not None else self._try_count
+        self._timeout = timeout if timeout is not None else self._timeout
+        self._try_count = try_count if try_count is not None else self._try_count
 
-        self.__msg_buffer = b''
-        self.__listeners: List[Listener] = []
+        self._msg_buffer = b''
+        self._listeners: List[Listener] = []
 
-        self.__lock = Lock()
+        self._lock = Lock()
 
-    def __send(self, msg):
+    @property
+    def on_write(self):
+        """
+        If implemented, this function will be called when a message is sent to the device.
+        """
+        return self._on_write
+
+    @on_write.setter
+    def on_write(self, value):
+        """
+        Sets the on_write function.
+
+        Args:
+        - value: The function to be set as the on_write function.
+        """
+        self._on_write = value
+
+    @property
+    def on_event(self):
+        """
+        If implemented, this function will be called when an event is triggered.
+        """
+        return self._on_event
+
+    @on_event.setter
+    def on_event(self, value):
+        """
+        Sets the on_event function.
+
+        Args:
+        - value: The function to be set as the on_event function.
+        """
+        self._on_event = value
+
+    @property
+    def on_log(self):
+        """
+        If implemented, this function will be called for logging purposes.
+        """
+        return self._on_log
+
+    @on_log.setter
+    def on_log(self, value):
+        """
+        Sets the on_log function.
+
+        Args:
+        - value: The function to be set as the on_log function.
+        """
+        self._on_log = value
+
+    def _send(self, msg):
         """
         Sends a message to the device using the on_write function.
 
         Args:
-        - msg: message to be sent to the device.
+        - msg: The message to be sent to the device.
         """
-        with self.__lock:
-            if self.on_write is not None:
-                self.on_write(msg)
+        with self._lock:
+            if self._on_write is not None:
+                self._on_write(msg)
 
-    def __generate_tag(self):
+    def _generate_tag(self):
         """
         Generates a random tag for a message.
 
         Returns:
-        - tag: a string of 6 random uppercase letters and digits.
+        - tag: A string of 6 random uppercase letters and digits.
         """
         tag = ''.join(random.choices(
             string.ascii_uppercase + string.digits, k=6))
@@ -96,31 +167,32 @@ class Client:
         Sends a command to the device and waits for a response.
 
         Args:
-        - command: command to be sent to the device.
-        - wait_event: whether to wait for an event to be triggered.
+        - command: The command to be sent to the device.
+        - wait_event: Whether to wait for an event to be triggered.
+        - timeout: Timeout value for waiting for a response from the device.
 
         Returns:
-        - response: response received from the device.
+        - response: The response received from the device.
         """
         listener = Listener(command, Event(), None)
 
-        for i in range(self.__try_count):
+        for i in range(self._try_count):
             _LOGGER.debug(
-                "send_command:{} try:{}/{}".format(command, i+1, self.__try_count))
+                "send_command:{} try:{}/{}".format(command, i+1, self._try_count))
 
             if wait_event:
                 listener.event.clear()
-                self.__listeners.append(listener)
+                self._listeners.append(listener)
 
-            self.__send('{}\r\n'.format(command).encode('utf-8'))
+            self._send('{}\r\n'.format(command).encode('utf-8'))
 
             if wait_event:
                 if timeout is not None:
                     listener.event.wait(timeout)
                 else:
-                    listener.event.wait(self.__timeout)
+                    listener.event.wait(self._timeout)
                 # remove listener
-                self.__listeners.remove(listener)
+                self._listeners.remove(listener)
 
             if not wait_event or listener.response is not None:
                 break
@@ -132,18 +204,19 @@ class Client:
         Sets a value for a command on the device.
 
         Args:
-        - command: command to be set.
-        - value: value to be set for the command.
-        - tag: whether to add a tag to the command.
-        - wait_event: whether to wait for an event to be triggered.
+        - command: The command to be set.
+        - value: The value to be set for the command.
+        - tag: Whether to add a tag to the command.
+        - wait_event: Whether to wait for an event to be triggered.
+        - timeout: Timeout value for waiting for a response from the device.
 
         Returns:
-        - response: response received from the device.
+        - response: The response received from the device.
         """
 
         if tag:
             command = "{}{}@{}={}".format(CMD_PREFIX,
-                                          self.__generate_tag(), command, value)
+                                          self._generate_tag(), command, value)
         else:
             command = "{}{}={}".format(CMD_PREFIX, command, value)
 
@@ -158,16 +231,17 @@ class Client:
         Queries the value of a command on the device.
 
         Args:
-        - command: command to be queried.
-        - tag: whether to add a tag to the command.
-        - wait_event: whether to wait for an event to be triggered.
+        - command: The command to be queried.
+        - tag: Whether to add a tag to the command.
+        - wait_event: Whether to wait for an event to be triggered.
+        - timeout: Timeout value for waiting for a response from the device.
 
         Returns:
-        - response: response received from the device.
+        - response: The response received from the device.
         """
         if tag:
             command = "{}{}@{}?".format(CMD_PREFIX,
-                                        self.__generate_tag(), command)
+                                        self._generate_tag(), command)
         else:
             command = "{}{}?".format(CMD_PREFIX, command)
 
@@ -191,7 +265,7 @@ class Client:
         """
         if tag:
             command = "{}{}@{}".format(CMD_PREFIX,
-                                       self.__generate_tag(), command)
+                                       self._generate_tag(), command)
         else:
             command = "{}{}".format(CMD_PREFIX, command)
 
@@ -217,9 +291,9 @@ class Client:
         Args:
         - msg: message received from the device.
         """
-        self.__msg_buffer += msg
+        self._msg_buffer += msg
 
-        matches = re.findall(b'\r{.*}\n', self.__msg_buffer)
+        matches = re.findall(b'\r{.*}\n', self._msg_buffer)
 
         if matches is None or len(matches) == 0:
             return
@@ -230,7 +304,7 @@ class Client:
                 # response frame
                 if "type" in paylod and paylod["type"] == CMD_TYPE_RESPONSE:
                     if "name" in paylod:
-                        for listener in self.__listeners:
+                        for listener in self._listeners:
                             if listener.name == paylod["name"]:
                                 listener.response = paylod
                                 listener.event.set()
@@ -238,55 +312,113 @@ class Client:
                                     "response:{}".format(paylod))
 
                 if "type" in paylod and paylod["type"] == CMD_TYPE_EVENT:
-                    if self.on_event is not None:
-                        self.on_event(paylod)
+                    if self._on_event is not None:
+                        self._on_event(paylod)
 
                 if "type" in paylod and paylod["type"] == CMD_TYPE_LOG:
                     if "name" in paylod:
                         if paylod["name"] == LOG_AT:
-                            for listener in self.__listeners:
+                            for listener in self._listeners:
                                 if listener.name in paylod["data"]:
                                     listener.response = paylod
                                     listener.event.set()
                                     _LOGGER.debug(
                                         "response:{}".format(paylod))
                         if paylod["name"] == LOG_LOG:
-                            if self.on_log is not None:
-                                self.on_log(paylod)
+                            if self._on_log is not None:
+                                self._on_log(paylod)
 
             except Exception as ex:
                 _LOGGER.error("payload decode exception:{}".format(ex))
 
             finally:
-                self.__msg_buffer = self.__msg_buffer[self.__msg_buffer.find(
+                self._msg_buffer = self._msg_buffer[self._msg_buffer.find(
                     RESPONSE_SUFFIX)+2:]
 
 
 class SerialClient(Client):
+    import serial as serial
+
     def __init__(self, port, baudrate=921600, timeout=0.1, **kwargs):
-        self.__serial = serial.Serial(port, baudrate, timeout=timeout)
-        self.__running = False
-        self.__thread = None
-        super().__init__(self.__serial.write, **kwargs)
+
+        self._serial = self.serial.Serial(
+            port, baudrate, timeout=timeout,  **kwargs)
+        self._running = False
+        self._thread = None
+        super().__init__(self._serial.write)
 
     def _recieve_thread(self):
-        while self.__running:
-            if self.__serial.in_waiting:
-                msg = self.__serial.read(self.__serial.in_waiting)
+        while self._running:
+            if self._serial.in_waiting:
+                msg = self._serial.read(self._serial.in_waiting)
                 if msg != b'':
-                    self._recieve_handler(msg)
+                    self.on_recieve(msg)
+        self._running = False
+        self._thread = None
+        self._serial.close()
+
+    def connect(self):
+        if not self._serial.is_open:
+            self._serial.open()
+
+    def disconnect(self):
+        if self._serial.is_open:
+            self._serial.close()
 
     def loop_start(self):
-        if not self.__running:
-            self.__running = True
-            self.__thread = Thread(
+        if not self._serial.is_open:
+            self._serial.open()
+
+        if not self._running:
+            self._running = True
+            self._thread = Thread(
                 target=self._recieve_thread)
-            self.__thread.start()
+            self._thread.start()
 
     def loop_stop(self):
-        if self.__running:
-            self.__running = False
-            self.__thread.join()
-            self.__thread = None
+        if self._thread is None:
+            return
+
+        self._running = False
+        if current_thread() != self._thread:
+            self._thread.join()
+            self._thread = None
 
 
+class MQTTClient(Client):
+    import paho.mqtt.client as mqtt
+
+    def __init__(self, host="localhost", port=1883, tx_topic="#", rx_topic="#", **kwargs):
+
+        self._client = self.mqtt.Client()
+        self._tx_topic = tx_topic
+        self._rx_topic = rx_topic
+        self._client.on_message = self.__on_recieve
+        self._client.on_connect = self.__on_connect
+        self._host = host
+        self._port = port
+
+        for key in kwargs:
+            if key == "username":
+                self._client.username_pw_set(
+                    kwargs["username"], kwargs["password"])
+                break
+
+        self._client.connect(self._host, self._port, 60)
+        super().__init__(lambda msg: self._client.publish(self._tx_topic, msg))
+
+    def __on_recieve(self, client, userdata, msg):
+        self.on_recieve(msg.payload)
+
+    def __on_connect(self, client, userdata, flags, rc):
+        self._client.subscribe(self._rx_topic)
+
+    def connect(self):
+        self._client.connect(self._host, self._port, 60)
+
+    def loop_start(self):
+        self._client.loop_start()
+
+    def loop_stop(self):
+        self._client.loop_stop()
+        self._client.disconnect()

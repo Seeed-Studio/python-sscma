@@ -38,14 +38,22 @@ def on_device_connect(device):
     device.tscore = 70
     device.tiou = 70
 
+
+client = SerialClient("COM83")
+
+def signal_handler(signal, frame):
+    print("Ctrl+C pressed!")
+    client.loop_stop()
+   
 def main():
 
-    client = SerialClient("COM83")
+    signal.signal(signal.SIGINT, signal_handler)
+ 
     device = Device(client)
 
     device.on_monitor = monitor_handler
     device.on_connect = on_device_connect
-
+     
     device.loop_start()
 
     print(device.info)
