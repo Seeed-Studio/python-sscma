@@ -364,6 +364,10 @@ class SerialClient(Client):
     def disconnect(self):
         if self._serial.is_open:
             self._serial.close()
+    
+    @property
+    def is_connected(self):
+        return self._serial.is_open
 
     def loop_start(self):
         if not self._serial.is_open:
@@ -412,9 +416,16 @@ class MQTTClient(Client):
 
     def __on_connect(self, client, userdata, flags, rc):
         self._client.subscribe(self._rx_topic)
+        
+    @property
+    def is_connected(self):
+        return self._client.is_connected()
 
     def connect(self):
         self._client.connect(self._host, self._port, 60)
+        
+    def disconnect(self):
+        self._client.disconnect()
 
     def loop_start(self):
         self._client.loop_start()

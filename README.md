@@ -17,9 +17,8 @@ More information about the sscma_micro can be found at
 ```bash
 pip install python-sscma
 ```
-
 ```python
-from sscma.micro.client import Client
+from sscma.micro.client import Client, SerialClient
 from sscma.micro.device import Device
 from sscma.micro.const import *
 import serial
@@ -34,16 +33,6 @@ import numpy as np
 logging.basicConfig(level=logging.DEBUG)
 
 _LOGGER = logging.getLogger(__name__)
-
-recieve_thread_running = True
-
-
-def recieve_thread(serial_port, client):
-    while recieve_thread_running:
-        if serial_port.in_waiting:
-            msg = serial_port.read(serial_port.in_waiting)
-            if msg != b'':
-                client.recieve_handler(msg)
 
 
 def monitor_handler(msg):
@@ -63,31 +52,33 @@ def monitor_handler(msg):
     print(msg)
 
 
+def on_device_connect(device):
+    print("device connected")
+    device.invoke(-1, False, True)
+    device.tscore = 70
+    device.tiou = 70
+
+
+client = SerialClient("COM83")
+
 def signal_handler(signal, frame):
     print("Ctrl+C pressed!")
-    global recieve_thread_running
-    recieve_thread_running = False
-    exit(0)
-
-
+    client.loop_stop()
+   
 def main():
+
     signal.signal(signal.SIGINT, signal_handler)
-    serial_port = serial.Serial("COM45", 921600, timeout=0.1)
-    client = Client(lambda msg: serial_port.write(msg), debug=1)
-    threading.Thread(target=recieve_thread, args=(
-        serial_port, client)).start()
-
-    time.sleep(0.2)
-
-    device = Device(client, debug=1)
+ 
+    device = Device(client)
 
     device.on_monitor = monitor_handler
+    device.on_connect = on_device_connect
+     
+    device.loop_start()
 
     print(device.info)
 
-
-    device.invoke(-1)
-    i = 30
+    i = 60
 
     while True:
         print(device.wifi)

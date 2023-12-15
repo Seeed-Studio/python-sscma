@@ -1,2 +1,1 @@
-"""SSCMA Micro"""
-from .micro import *
+from . import micro
