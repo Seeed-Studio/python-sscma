@@ -1,6 +1,7 @@
 import os
 import io
 import json
+import time
 import base64
 import logging
 from typing import Optional  # noqa: F401
@@ -10,7 +11,7 @@ from .const import *
 from .client import Client
 from .info import DeviceInfo, ModelInfo, WiFiInfo, MQTTInfo
 
-from threading import Timer
+from threading import Timer, Thread
 
 import traceback
 
@@ -45,6 +46,9 @@ class Device:
         self._invoke = 0  # invoke times
         self._sample = 0  # sample times
 
+        self._show = True
+        self._fliter = False
+
         self._on_connect = None
         self._on_monitor = None
         self._on_log = None
@@ -55,6 +59,49 @@ class Device:
         self._timeout = timeout
 
         self._timer = None
+
+        self._daemon_thread = None
+        self._last_event_time = 0
+        self._deamon = False
+
+    def daemon(self):
+        """Device daemon."""
+        self._deamon = True
+        while self._deamon:
+            time.sleep(self._timeout)
+            # if device is ready, check if device is lost
+            if self._status & DeviceStatus.READY:
+                id = self._client.get(CMD_AT_ID, timeout=0.5)
+                if id is None:
+                    self._status = DeviceStatus.UNKNOWN
+                    _LOGGER.debug("Device lost, Reinitialize")
+                    self.initialize()
+
+            # if device is invoking, check if invoke is satisfied
+            if self._status & DeviceStatus.INVOKING:
+
+                if time.time() - self._last_event_time > self._timeout * self._retry_count:
+                    _LOGGER.debug("Device invoke timeout, Reinvoke")
+                    self.invoke(self._invoke, self._fliter, self._show)
+                    continue
+                invoke_statu = self.invoke_status
+                if invoke_statu != None and invoke_statu == False:
+                    _LOGGER.debug("Device invoke status is not satisfied:{}, Reinvoke".format(
+                        self.invoke_status))
+                    self.invoke(self._invoke, self._fliter, self._show)
+
+            # if device is sampling, check if sample is satisfied
+            if self._status & DeviceStatus.SAMPLING:
+
+                if time.time() - self._last_event_time > self._timeout * self._retry_count:
+                    _LOGGER.debug("Device sample timeout, Resample")
+                    self.sample = self._sample
+                    continue
+                sample = self.sample
+                if sample != None and sample == 0:
+                    self.sample = self._sample
+                    _LOGGER.debug(
+                        "Device sample status is not satisfied:{}, Resample".format(self.sample))
 
     def check_status(status):
         """Decorator to check if the device is ready."""
@@ -80,7 +127,24 @@ class Device:
         if hasattr(self._client, "loop_start"):
             self._client.loop_start()
 
+        self._daemon_thread = Thread(target=self.daemon)
+        self._daemon_thread.start()
+
         self.initialize()
+
+    def loop_stop(self):
+        """Stop the device loop. """
+        
+        self._status = DeviceStatus.UNKNOWN
+        self.Break()
+        
+        self._deamon = False
+        self._daemon_thread.join()
+        
+        if hasattr(self._client, "loop_stop"):
+            self._client.loop_stop()
+        
+
 
     def initialize(self):
         """Initialize the device."""
@@ -244,14 +308,14 @@ class Device:
 
     @property
     @check_status(DeviceStatus.READY)
-    def invoke(self):
+    def invoke_status(self):
         """
-        Gets the invoke of the device.
+        Gets the invoke status of the device.
         """
 
         response = self._client.get(CMD_AT_INVOKE)
         if response is not None and response["code"] == CMD_OK:
-            return response["data"]
+            return True if response['data'] == 1 else False
         else:
             return None
 
@@ -266,6 +330,8 @@ class Device:
             value, 1 if filter else 0, 0 if show else 1))
         if response is not None and response["code"] == CMD_OK:
             self._invoke = value
+            self._fliter = filter
+            self._show = show
             if value != 0:
                 self._status |= DeviceStatus.INVOKING
                 self._status &= ~DeviceStatus.SAMPLING
@@ -291,7 +357,8 @@ class Device:
         """
         Sets the tscore of the device.
         """
-        response = self._client.set(CMD_AT_TSCORE, '{}'.format(value))
+        response = self._client.set(
+            CMD_AT_TSCORE, '{}'.format(value), wait_event=False)
         if response is not None and response["code"] == CMD_OK:
             return response["data"]
         else:
@@ -315,7 +382,8 @@ class Device:
         """
         Sets the tiou of the device.
         """
-        response = self._client.set(CMD_AT_TIOU, '{}'.format(value))
+        response = self._client.set(
+            CMD_AT_TIOU, '{}'.format(value), wait_event=False)
         if response is not None and response["code"] == CMD_OK:
             return response["data"]
         else:
@@ -529,8 +597,10 @@ class Device:
     def _event_process(self, event):
         """Process an event."""
         try:
+            self._last_event_time = time.time()
 
             if EVENT_INVOKE in event["name"]:
+
                 if self._invoke != -1:
                     self._invoke -= 1
 
@@ -538,6 +608,7 @@ class Device:
                     self._status &= ~DeviceStatus.INVOKING
 
             if EVENT_SAMPLE in event["name"]:
+
                 if self._sample != -1:
                     self._sample -= 1
 

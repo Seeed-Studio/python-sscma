@@ -1,3 +1,5 @@
 pillow
 pyserial
 paho-mqtt
+xmodem
+tqdm

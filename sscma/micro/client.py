@@ -408,7 +408,7 @@ class MQTTClient(Client):
                     kwargs["username"], kwargs["password"])
                 break
 
-        self._client.connect(self._host, self._port, 60)
+        self._client.connect(self._host, self._port, 120)
         super().__init__(lambda msg: self._client.publish(self._tx_topic, msg))
 
     def __on_recieve(self, client, userdata, msg):
@@ -422,7 +422,7 @@ class MQTTClient(Client):
         return self._client.is_connected()
 
     def connect(self):
-        self._client.connect(self._host, self._port, 60)
+        self._client.connect(self._host, self._port, 120)
         
     def disconnect(self):
         self._client.disconnect()

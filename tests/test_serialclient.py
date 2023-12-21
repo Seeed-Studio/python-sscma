@@ -35,11 +35,11 @@ def monitor_handler(msg):
 def on_device_connect(device):
     print("device connected")
     device.invoke(-1, False, True)
-    device.tscore = 70
-    device.tiou = 70
+    device.tscore = 50
+    device.tiou = 35
 
 
-client = SerialClient("COM83")
+client = SerialClient("/dev/ttyACM0")
 
 def signal_handler(signal, frame):
     print("Ctrl+C pressed!")
@@ -65,11 +65,7 @@ def main():
         print(device.mqtt)
         print(device.info)
         print(device.model)
-        device.tscore = i
-        device.tiou = i
-        i = i + 1
-        if i > 100:
-            i = 30
+
 
         time.sleep(2)
 

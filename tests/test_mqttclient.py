@@ -4,14 +4,12 @@ import time
 from sscma.micro.client import MQTTClient
 from sscma.micro.device import Device
 from sscma.micro.const import *
-import serial
-import threading
 import time
 import logging
 import cv2
 import base64
 import numpy as np
-
+import signal
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -20,8 +18,8 @@ _LOGGER = logging.getLogger(__name__)
 
 # 定义代理服务器和主题
 broker_address = "192.168.199.230"
-rx_topic = "sscma/v0/grove_vision_ai_we2_360779f5/tx"
-tx_topic = "sscma/v0/grove_vision_ai_we2_360779f5/rx"
+rx_topic = "sscma/v0/grove_vision_ai_we2_51b078b9/tx"
+tx_topic = "sscma/v0/grove_vision_ai_we2_51b078b9/rx"
 
 
 def on_connect(client, userdata, flags, rc):
@@ -54,19 +52,27 @@ def monitor_handler(msg):
 
 def on_device_connect(device):
     print("device connected")
-    device.invoke(-1, True, True)
-    device.tscore = 70
-    device.tiou = 70
+    device.invoke(-1, False, True)
+    device.tscore = 50
+    device.tiou = 35
+
+
+device = Device(MQTTClient(host=broker_address, port=1883, tx_topic=tx_topic,
+                           rx_topic=rx_topic, username="user", password="user"))
+
+
+def signal_handler(signal, frame):
+    device.loop_stop()
+    exit(0)
 
 
 def main():
 
-    client = MQTTClient(host=broker_address, port=1883, tx_topic=tx_topic,
-                        rx_topic=rx_topic, username="user", password="user")
-    device = Device(client)
     device.on_monitor = monitor_handler
     device.on_connect = on_device_connect
     device.loop_start()
+
+    signal.signal(signal.SIGINT, signal_handler)
 
     i = 60
     while True:
