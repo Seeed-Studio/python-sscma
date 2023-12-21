@@ -1,12 +1,26 @@
-from setuptools import setup, find_packages
+import setuptools
+from setuptools import find_packages
+import re
 
-setup(
+with open("./sscma/__init__.py", 'r') as f:
+    content = f.read()
+    # from https://www.py4u.net/discuss/139845
+    version = re.search(r'__version__\s*=\s*[\'"]([^\'"]*)[\'"]', content).group(1)
+    
+with open("README.md", "r") as fh:
+    long_description = fh.read()
+
+setuptools.setup(
     name='python-sscma',
-    version='0.0.3',
-    author='LynnL4',
+    version=version,
+    author='Seeed Studio',
     author_email='lht856@foxmail.com',
-    description='A simple python package for Home Assistant to control SSCMA devices',
+    description='<INSERT_DESCRIPTION>',
+    long_description=long_description,
+    long_description_content_type="text/markdown",
+    url='https://github.com/Seeed-Studio/python-sscma',
     packages=find_packages(),
+    package_data={'sscma': ['fonts/*.ttf']},
     install_requires=[],
     classifiers=[
         'License :: OSI Approved :: MIT License',
