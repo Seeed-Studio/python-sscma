@@ -57,7 +57,7 @@ class Client:
     - try_count: Number of times to try sending a command to the device.
     """
 
-    _timeout: int = 10
+    _timeout: int = 1
     _try_count: int = 3
 
     def __init__(self,

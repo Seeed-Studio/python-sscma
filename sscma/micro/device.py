@@ -23,12 +23,15 @@ class Device:
     Represents a device that can communicate with the SSCMA system.
     """
 
-    _retry_count = 3
+    _heartbeat = 1
     _timeout = 5
+    _keepalive = 60
 
     def __init__(self,
                  client: Client = None,
-                 timeout: int = 5,
+                 timeout: int = _timeout,
+                 keepalive: int = _keepalive,
+                 heartbeat: int = _heartbeat
                  ) -> None:
 
         self._client = client
@@ -57,51 +60,44 @@ class Device:
         self._mqtt_changed = False
 
         self._timeout = timeout
+        self._keepalive = keepalive
+        self._heartbeat = heartbeat
+        self._last_event_time = 0
+        self._last_alive_time = 0
 
         self._timer = None
 
         self._daemon_thread = None
-        self._last_event_time = 0
         self._deamon = False
 
     def daemon(self):
         """Device daemon."""
         self._deamon = True
         while self._deamon:
-            time.sleep(self._timeout)
+            time.sleep(self._heartbeat)
+            # if device is sampling, check if sample is satisfied
+            if self._status & DeviceStatus.SAMPLING:
+                if time.time() - self._last_event_time > self._timeout:
+                    _LOGGER.debug("Device sample timeout, Resample")
+                    self.sample = self._sample
+                    continue
+                
+            if self._status & DeviceStatus.INVOKING:
+                if time.time() - self._last_event_time > self._timeout:
+                    _LOGGER.debug("Device invoke timeout, Reinvoke")
+                    self.invoke(self._invoke, self._fliter, self._show)
+                    continue
+            
             # if device is ready, check if device is lost
-            if self._status & DeviceStatus.READY:
+            if self._status & DeviceStatus.READY and time.time() - self._last_alive_time > self._keepalive:
                 id = self._client.get(CMD_AT_ID, timeout=0.5)
                 if id is None:
                     self._status = DeviceStatus.UNKNOWN
                     _LOGGER.debug("Device lost, Reinitialize")
                     self.initialize()
-
-            # if device is invoking, check if invoke is satisfied
-            if self._status & DeviceStatus.INVOKING:
-
-                if time.time() - self._last_event_time > self._timeout * self._retry_count:
-                    _LOGGER.debug("Device invoke timeout, Reinvoke")
-                    self.invoke(self._invoke, self._fliter, self._show)
-                    continue
-                invoke_statu = self.invoke_status
-                if invoke_statu != None and invoke_statu == False:
-                    _LOGGER.debug("Device invoke status is not satisfied:{}, Reinvoke".format(
-                        self.invoke_status))
-                    self.invoke(self._invoke, self._fliter, self._show)
-
-            # if device is sampling, check if sample is satisfied
-            if self._status & DeviceStatus.SAMPLING:
-
-                if time.time() - self._last_event_time > self._timeout * self._retry_count:
-                    _LOGGER.debug("Device sample timeout, Resample")
-                    self.sample = self._sample
-                    continue
-                sample = self.sample
-                if sample != None and sample == 0:
-                    self.sample = self._sample
-                    _LOGGER.debug(
-                        "Device sample status is not satisfied:{}, Resample".format(self.sample))
+                else:
+                    self._last_alive_time = time.time()
+                    
 
     def check_status(status):
         """Decorator to check if the device is ready."""
@@ -236,7 +232,7 @@ class Device:
         Gets the wifi of the device.
         """
 
-        if self._wifi is not None and not skip_cache and not self._wifi_changed and self._status & DeviceStatus.WIFI_CONNECTED:
+        if self._wifi is not None and not skip_cache and not self._wifi_changed and (self._status & DeviceStatus.WIFI_CONNECTED or self._wifi.SSID == ""):
             return self._wifi
 
         self._wifi = self._fetch_wifi()
@@ -249,7 +245,7 @@ class Device:
         Gets the mqtt of the device.
         """
 
-        if self._mqtt is not None and not skip_cache and not self._mqtt_changed and self._status & DeviceStatus.MQTT_CONNECTED:
+        if self._mqtt is not None and not skip_cache and not self._mqtt_changed and (self._status & DeviceStatus.MQTT_CONNECTED or self._status & DeviceStatus.WIFI_CONNECTTING):
             return self._mqtt
 
         self._mqtt = self._fetch_mqtt()
@@ -507,8 +503,12 @@ class Device:
 
         for i, (score, target) in enumerate(classes):
 
-            target_str = self.model.classes[target] if target < len(
-                self.model.classes) else str(target)
+            if self.model:
+                target_str = self.model.classes[target] if target < len(
+                    self.model.classes) else str(target)
+            else:
+                target_str = str(target)
+                
             alpha = 0.3
             fill_color = COLORS[target % len(COLORS)]
             rect_left = (img_w / num_classes) * i
@@ -546,8 +546,12 @@ class Device:
         for box in boxes:
             x, y, w, h, score, target = box
 
-            target_str = self.model.classes[target] if target < len(
-                self.model.classes) else str(target)
+            if self.model:
+                target_str = self.model.classes[target] if target < len(
+                    self.model.classes) else str(target)
+            else:
+                target_str = str(target)
+                
             alpha = 0.5
             fill_color = COLORS[target % len(COLORS)]
             rect_left = x - w / 2
@@ -597,7 +601,9 @@ class Device:
     def _event_process(self, event):
         """Process an event."""
         try:
+            
             self._last_event_time = time.time()
+            self._last_alive_time = time.time()
 
             if EVENT_INVOKE in event["name"]:
 
