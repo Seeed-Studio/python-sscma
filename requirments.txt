@@ -1,4 +1,4 @@
-pillow
+supervision
 pyserial
 paho-mqtt
 xmodem

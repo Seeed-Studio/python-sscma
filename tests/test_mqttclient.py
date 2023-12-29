@@ -18,8 +18,8 @@ _LOGGER = logging.getLogger(__name__)
 
 # 定义代理服务器和主题
 broker_address = "192.168.199.230"
-rx_topic = "sscma/v0/grove_vision_ai_we2_51b078b9/tx"
-tx_topic = "sscma/v0/grove_vision_ai_we2_51b078b9/rx"
+rx_topic = "sscma/v0/grove_vision_ai_we2_bdf65343/tx"
+tx_topic = "sscma/v0/grove_vision_ai_we2_bdf65343/rx"
 
 
 def on_connect(client, userdata, flags, rc):

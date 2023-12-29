@@ -5,7 +5,7 @@ import time
 import base64
 import logging
 from typing import Optional  # noqa: F401
-from PIL import Image, ImageDraw, ImageFont, ImageFile
+# from PIL import Image, ImageDraw, ImageFont, ImageFile
 
 from .const import *
 from .client import Client
@@ -480,123 +480,123 @@ class Device:
 
         return ModelInfo(model)
 
-    def _draw_classes(self, image, classes):
-        """
-        Draws classes on an image.
+    # def _draw_classes(self, image, classes):
+    #     """
+    #     Draws classes on an image.
 
-        Args:
-        image: The image to draw the classes on.
-        classes: The classes to draw.
-        """
+    #     Args:
+    #     image: The image to draw the classes on.
+    #     classes: The classes to draw.
+    #     """
 
-        if image.mode != "RGBA":
-            image = image.convert("RGBA")
+    #     if image.mode != "RGBA":
+    #         image = image.convert("RGBA")
 
-        transp = Image.new('RGBA', image.size, (0, 0, 0, 0))
-        draw = ImageDraw.Draw(transp, "RGBA")
+    #     transp = Image.new('RGBA', image.size, (0, 0, 0, 0))
+    #     draw = ImageDraw.Draw(transp, "RGBA")
 
-        img_w, img_h = image.size
+    #     img_w, img_h = image.size
 
-        num_classes = len(classes)
-        rect_bottom = int(img_h / 10)
-        font_size = int(img_w / 16)
+    #     num_classes = len(classes)
+    #     rect_bottom = int(img_h / 10)
+    #     font_size = int(img_w / 16)
 
-        for i, (score, target) in enumerate(classes):
+    #     for i, (score, target) in enumerate(classes):
 
-            if self.model:
-                target_str = self.model.classes[target] if target < len(
-                    self.model.classes) else str(target)
-            else:
-                target_str = str(target)
+    #         if self.model:
+    #             target_str = self.model.classes[target] if target < len(
+    #                 self.model.classes) else str(target)
+    #         else:
+    #             target_str = str(target)
                 
-            alpha = 0.3
-            fill_color = COLORS[target % len(COLORS)]
-            rect_left = (img_w / num_classes) * i
-            rect_right = (img_w / num_classes) * (i + 1)
-            draw.rectangle([rect_left, 0, rect_right, rect_bottom],
-                           fill=(*fill_color, int(255 * alpha)))
+    #         alpha = 0.3
+    #         fill_color = COLORS[target % len(COLORS)]
+    #         rect_left = (img_w / num_classes) * i
+    #         rect_right = (img_w / num_classes) * (i + 1)
+    #         draw.rectangle([rect_left, 0, rect_right, rect_bottom],
+    #                        fill=(*fill_color, int(255 * alpha)))
 
-            font = ImageFont.truetype(self._font_path, size=font_size)
-            text_left = (img_w / num_classes) * i + 5
-            text_top = rect_bottom - \
-                font_size - 5 if rect_bottom >= font_size else rect_bottom + font_size
-            draw.text((text_left, text_top),
-                      f"{target_str}: {score}", fill="#ffffff", font=font)
-            image.paste(Image.alpha_composite(image, transp))
-        image = image.convert("RGB")
-        return image
+    #         font = ImageFont.truetype(self._font_path, size=font_size)
+    #         text_left = (img_w / num_classes) * i + 5
+    #         text_top = rect_bottom - \
+    #             font_size - 5 if rect_bottom >= font_size else rect_bottom + font_size
+    #         draw.text((text_left, text_top),
+    #                   f"{target_str}: {score}", fill="#ffffff", font=font)
+    #         image.paste(Image.alpha_composite(image, transp))
+    #     image = image.convert("RGB")
+    #     return image
 
-    def _draw_boxes(self, image, boxes):
-        """
-        Draws boxes on an image.
+    # def _draw_boxes(self, image, boxes):
+    #     """
+    #     Draws boxes on an image.
 
-        Args:
-        image: The image to draw the boxes on.
-        boxes: The boxes to draw.
-        """
+    #     Args:
+    #     image: The image to draw the boxes on.
+    #     boxes: The boxes to draw.
+    #     """
 
-        if image.mode != "RGBA":
-            image = image.convert("RGBA")
+    #     if image.mode != "RGBA":
+    #         image = image.convert("RGBA")
 
-        transp = Image.new('RGBA', image.size, (0, 0, 0, 0))
-        draw = ImageDraw.Draw(transp, "RGBA")
+    #     transp = Image.new('RGBA', image.size, (0, 0, 0, 0))
+    #     draw = ImageDraw.Draw(transp, "RGBA")
 
-        img_w, img_h = image.size
+    #     img_w, img_h = image.size
 
-        for box in boxes:
-            x, y, w, h, score, target = box
+    #     for box in boxes:
+    #         x, y, w, h, score, target = box
 
-            if self.model:
-                target_str = self.model.classes[target] if target < len(
-                    self.model.classes) else str(target)
-            else:
-                target_str = str(target)
+    #         if self.model:
+    #             target_str = self.model.classes[target] if target < len(
+    #                 self.model.classes) else str(target)
+    #         else:
+    #             target_str = str(target)
                 
-            alpha = 0.5
-            fill_color = COLORS[target % len(COLORS)]
-            rect_left = x - w / 2
-            rect_right = x + w / 2
-            rect_top = y - h / 2
-            rect_bottom = y + h / 2
-            rect_left = rect_left > 0 and rect_left or 0
-            rect_right = rect_right < img_w and rect_right or img_w
-            rect_top = rect_top > 0 and rect_top or 0
-            rect_bottom = rect_bottom < img_h and rect_bottom or img_h
-            draw.rectangle([rect_left, rect_top, rect_right,
-                           rect_bottom], outline=(*fill_color, int(255 * alpha)),  width=2)
-            font_size = int(min(img_w, img_h) / 16)
-            font = ImageFont.truetype(self._font_path, int(font_size))
-            text_color = "#ffffff"
-            text_left = rect_left
-            text_top = rect_top - font_size
-            text_top = text_top > 0 and text_top or 0
-            draw.rectangle([text_left, text_top, rect_right,
-                           text_top + font_size], fill=(*fill_color, int(255 * alpha)))
-            draw.text((text_left+2, text_top),
-                      f"{target_str}: {score}", fill=text_color, font=font)
-            image.paste(Image.alpha_composite(image, transp))
+    #         alpha = 0.5
+    #         fill_color = COLORS[target % len(COLORS)]
+    #         rect_left = x - w / 2
+    #         rect_right = x + w / 2
+    #         rect_top = y - h / 2
+    #         rect_bottom = y + h / 2
+    #         rect_left = rect_left > 0 and rect_left or 0
+    #         rect_right = rect_right < img_w and rect_right or img_w
+    #         rect_top = rect_top > 0 and rect_top or 0
+    #         rect_bottom = rect_bottom < img_h and rect_bottom or img_h
+    #         draw.rectangle([rect_left, rect_top, rect_right,
+    #                        rect_bottom], outline=(*fill_color, int(255 * alpha)),  width=2)
+    #         font_size = int(min(img_w, img_h) / 16)
+    #         font = ImageFont.truetype(self._font_path, int(font_size))
+    #         text_color = "#ffffff"
+    #         text_left = rect_left
+    #         text_top = rect_top - font_size
+    #         text_top = text_top > 0 and text_top or 0
+    #         draw.rectangle([text_left, text_top, rect_right,
+    #                        text_top + font_size], fill=(*fill_color, int(255 * alpha)))
+    #         draw.text((text_left+2, text_top),
+    #                   f"{target_str}: {score}", fill=text_color, font=font)
+    #         image.paste(Image.alpha_composite(image, transp))
 
-        image = image.convert("RGB")
+    #     image = image.convert("RGB")
 
-        return image
+    #     return image
 
-    def _draw_keypoints(self, image, keypoints):
-        """
-        Draws keypoints on an image.
+    # def _draw_keypoints(self, image, keypoints):
+    #     """
+    #     Draws keypoints on an image.
 
-        Args:
-        image: The image to draw the keypoints on.
-        keypoints: The keypoints to draw.
-        """
-        draw = ImageDraw.Draw(image)
+    #     Args:
+    #     image: The image to draw the keypoints on.
+    #     keypoints: The keypoints to draw.
+    #     """
+    #     draw = ImageDraw.Draw(image)
 
-        for point in keypoints:
-            x, y, _, t = point
-            # Use x value for color differentiation
-            fill_color = COLORS[t % len(COLORS)]
-            draw.point([x, y], fill=fill_color)
+    #     for point in keypoints:
+    #         x, y, _, t = point
+    #         # Use x value for color differentiation
+    #         fill_color = COLORS[t % len(COLORS)]
+    #         draw.point([x, y], fill=fill_color)
 
-        return image
+    #     return image
 
     def _event_process(self, event):
         """Process an event."""
@@ -626,29 +626,29 @@ class Device:
                 reply = event["data"]
 
                 # draw image
-                if "image" in event["data"] and event["data"]["image"]:
+                # if "image" in event["data"] and event["data"]["image"]:
 
-                    ImageFile.LOAD_TRUNCATED_IMAGES = True
-                    image = Image.open(io.BytesIO(
-                        base64.b64decode(event["data"]["image"])))
+                #     ImageFile.LOAD_TRUNCATED_IMAGES = True
+                #     image = Image.open(io.BytesIO(
+                #         base64.b64decode(event["data"]["image"])))
 
-                    if "classes" in event["data"]:
-                        image = self._draw_classes(
-                            image, event["data"]["classes"])
+                #     if "classes" in event["data"]:
+                #         image = self._draw_classes(
+                #             image, event["data"]["classes"])
 
-                    if "boxes" in event["data"]:
-                        image = self._draw_boxes(image, event["data"]["boxes"])
+                #     if "boxes" in event["data"]:
+                #         image = self._draw_boxes(image, event["data"]["boxes"])
 
-                    if "points" in event["data"]:
-                        image = self._draw_keypoints(
-                            image, event["data"]["keypoints"])
+                #     if "points" in event["data"]:
+                #         image = self._draw_keypoints(
+                #             image, event["data"]["keypoints"])
 
-                    # reconvert image to base64
-                    buf = io.BytesIO()
-                    reply["image"] = image.save(buf, format='JPEG')
-                    base64_image = base64.b64encode(
-                        buf.getvalue()).decode('utf-8')
-                    reply["image"] = base64_image
+                #     # reconvert image to base64
+                #     buf = io.BytesIO()
+                #     reply["image"] = image.save(buf, format='JPEG')
+                #     base64_image = base64.b64encode(
+                #         buf.getvalue()).decode('utf-8')
+                #     reply["image"] = base64_image
 
                 self._on_monitor(reply)
 
