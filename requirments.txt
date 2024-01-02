@@ -2,5 +2,9 @@ supervision
 pyserial
 paho-mqtt
 xmodem
+opencv-python
+numpy
+scipy
+matplotlib
 tqdm
 click
