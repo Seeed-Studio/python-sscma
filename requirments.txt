@@ -3,3 +3,7 @@ pyserial
 paho-mqtt
 xmodem
 tqdm
+opencv-python
+numpy
+scipy
+matplotlib

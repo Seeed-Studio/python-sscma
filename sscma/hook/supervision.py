@@ -1,5 +1,7 @@
 import numpy as np
+
 from supervision import Detections
+
 from sscma.hook.utils import cxcywh_to_xyxy
 
 @classmethod
