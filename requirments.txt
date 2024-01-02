@@ -6,3 +6,5 @@ opencv-python
 numpy
 scipy
 matplotlib
+tqdm
+click
