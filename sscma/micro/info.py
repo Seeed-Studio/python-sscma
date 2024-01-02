@@ -100,8 +100,9 @@ class ModelInfo:
                 "image": "",
                 "author": "Unknown",
                 "token": "",
-                "classes": "",
+                "classes": [str(i) for i in range(0, 1024)]
             }
+
 
         self.data = data
 
