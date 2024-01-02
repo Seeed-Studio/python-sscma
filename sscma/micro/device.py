@@ -11,7 +11,7 @@ from .const import *
 from .client import Client
 from .info import DeviceInfo, ModelInfo, WiFiInfo, MQTTInfo
 
-from threading import Timer, Thread
+from threading import Timer, Thread, current_thread
 
 import traceback
 
@@ -69,6 +69,7 @@ class Device:
 
         self._daemon_thread = None
         self._deamon = False
+    
 
     def daemon(self):
         """Device daemon."""
@@ -134,11 +135,14 @@ class Device:
         self._status = DeviceStatus.UNKNOWN
         self.Break()
         
-        self._deamon = False
-        self._daemon_thread.join()
-        
         if hasattr(self._client, "loop_stop"):
             self._client.loop_stop()
+        
+        self._deamon = False
+        if current_thread() != self._daemon_thread:
+            self._daemon_thread.join()
+            self._daemon_thread = None
+    
         
 
 
@@ -476,9 +480,9 @@ class Device:
             model = json.loads(base64.b64decode(response["data"]["info"]))
         except Exception as ex:
             _LOGGER.error("fetch model exception:{}".format(ex))
-            return None
+            return ModelInfo(None)
 
-        return ModelInfo(model)
+        return ModelInfo(None)
 
     # def _draw_classes(self, image, classes):
     #     """
