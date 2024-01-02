@@ -123,7 +123,7 @@ class Device:
 
         if hasattr(self._client, "loop_start"):
             self._client.loop_start()
-
+        
         self._daemon_thread = Thread(target=self.daemon)
         self._daemon_thread.start()
 
@@ -133,17 +133,19 @@ class Device:
         """Stop the device loop. """
         
         self._status = DeviceStatus.UNKNOWN
+        
+        if self._timer is not None:
+            self._timer.cancel()
+        
         self.Break()
         
         if hasattr(self._client, "loop_stop"):
             self._client.loop_stop()
         
         self._deamon = False
-        if current_thread() != self._daemon_thread:
+        if self._daemon_thread is not None and current_thread() != self._daemon_thread:
             self._daemon_thread.join()
             self._daemon_thread = None
-    
-        
 
 
     def initialize(self):
@@ -159,7 +161,8 @@ class Device:
             self._timer = Timer(self._timeout, self.initialize)
             self._timer.start()
             return
-
+        
+        self._timer = None
         self._client.on_event = self._event_process
         self._client.on_log = self._log_process
 
