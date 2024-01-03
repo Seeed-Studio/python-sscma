@@ -13,9 +13,10 @@ from supervision import Detections
 from .session_manager import SessionManager
 from .utils import (
     parse_bytes_to_json,
-    SessionConfig,
-    image_from_base64,
+    SessionConfig
 )
+
+from sscma.utils.image import image_from_base64
 
 shared_session_manager = SessionManager()
 

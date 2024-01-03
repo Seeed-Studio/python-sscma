@@ -1,5 +1,4 @@
 import os
-import io
 import json
 import time
 import base64
@@ -62,14 +61,13 @@ class Device:
         self._timeout = timeout
         self._keepalive = keepalive
         self._heartbeat = heartbeat
-        self._last_event_time = 0
-        self._last_alive_time = 0
+        self._last_event_time = time.time()
+        self._last_alive_time = time.time()
 
         self._timer = None
 
         self._daemon_thread = None
         self._deamon = False
-    
 
     def daemon(self):
         """Device daemon."""
@@ -100,6 +98,10 @@ class Device:
                     self._last_alive_time = time.time()
                     
 
+    def is_alive(self):
+        """Return True if the device is ready."""
+        return self._daemon_thread is not None and self._daemon_thread.is_alive()
+    
     def check_status(status):
         """Decorator to check if the device is ready."""
 
@@ -469,9 +471,12 @@ class Device:
             else:
                 self._status &= ~DeviceStatus.MQTT_CONNECTED
                 self._status |= DeviceStatus.MQTT_CONNECTTING
-        pubsub = self._client.get(CMD_AT_MQTTPUBSUB)
-        self._mqtt_changed = False
-        return MQTTInfo(MQTTInfo.construct(server["data"], pubsub["data"]))
+            pubsub = self._client.get(CMD_AT_MQTTPUBSUB)
+            self._mqtt_changed = False
+            return MQTTInfo(MQTTInfo.construct(server["data"], pubsub["data"]))
+        else:
+            self._mqtt_changed = False
+            return MQTTInfo(None)
 
     def _fetch_model(self) -> ModelInfo:
         """Fetch model info from the device."""
@@ -657,7 +662,7 @@ class Device:
                 #         buf.getvalue()).decode('utf-8')
                 #     reply["image"] = base64_image
 
-                self._on_monitor(reply)
+                self._on_monitor(self, reply)
 
                 return
 
