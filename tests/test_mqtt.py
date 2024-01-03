@@ -4,8 +4,6 @@ import time
 from sscma.micro.client import Client
 from sscma.micro.device import Device
 from sscma.micro.const import *
-import serial
-import threading
 import time
 import logging
 import cv2
@@ -33,7 +31,7 @@ def on_message(client, tclient, msg):
     tclient.on_recieve(msg.payload)
 
 
-def monitor_handler(msg):
+def monitor_handler(device, msg):
 
     if "image" in msg:
         jpeg_bytes = base64.b64decode(msg["image"])

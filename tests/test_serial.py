@@ -25,7 +25,7 @@ def recieve_thread(serial_port, client):
                 client.on_recieve(msg)
 
 
-def monitor_handler(msg):
+def monitor_handler(device, msg):
     if "image" in msg:
         jpeg_bytes = base64.b64decode(msg["image"])
 
