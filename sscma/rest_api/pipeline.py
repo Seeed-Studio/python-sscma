@@ -17,10 +17,10 @@ from supervision import (
 from .utils import (
     SessionConfig,
     detection_to_tracked_bboxs,
-    image_to_base64,
     color_from_cmap,
 )
 
+from sscma.utils.image import image_to_base64
 
 class Pipeline:
     def __init__(self, config: SessionConfig):
