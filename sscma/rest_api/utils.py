@@ -28,36 +28,104 @@ class TrackerConfig:
     match_thresh: float = 0.5
     frame_rate: int = 15
 
+    def __post_init__(self):
+        self.track_thresh = float(self.track_thresh)
+        self.track_buffer = int(self.track_buffer)
+        self.match_thresh = float(self.match_thresh)
+        self.frame_rate = int(self.frame_rate)
+
 
 @dataclass
-class TraceConfig:
-    trace_position: Position = Position.CENTER
-    trace_length: int = 30
+class BoundingBoxConfig:
+    thickness: int = 2
 
     def __post_init__(self):
-        self.trace_position = Position(self.trace_position)
+        self.thickness = int(self.thickness)
+
+
+@dataclass
+class TracingConfig:
+    position: Position = Position.CENTER
+    trace_length: int = 30,
+    trace_thickness: int = 2
+
+    def __post_init__(self):
+        self.position = Position(self.position)
+        self.trace_length = int(self.trace_length)
+        self.trace_thickness = int(self.trace_thickness)
+
+
+@dataclass
+class LabelingConfig:
+    text_scale: float = 0.3
+    text_thickness: int = 1
+    text_padding: int = 3
+    text_position: Position = Position.TOP_LEFT
+    label_map: Union[Dict[int, str], Dict] = None
+
+    def __post_init__(self):
+        self.text_scale = float(self.text_scale)
+        self.text_thickness = int(self.text_thickness)
+        self.text_padding = int(self.text_padding)
+        self.text_position = Position(self.text_position)
+        if self.label_map is not None:
+            self.label_map = {
+                int(key): str(value) for key, value in self.label_map.items()
+            }
+
+
+@dataclass
+class PolygonConfig:
+    thickness: int = 1
+    text_scale: float = 0.3
+    text_thickness: int = 1
+    text_padding: int = 3
+
+    def __post_init__(self):
+        self.thickness = int(self.thickness)
+        self.text_scale = float(self.text_scale)
+        self.text_thickness = int(self.text_thickness)
+        self.text_padding = int(self.text_padding)
+
+
+@dataclass
+class HeatMapConfig:
+    position: Position = Position.BOTTOM_CENTER
+    opacity: float = 0.2
+    radius: int = 10
+    kernel_size: int = 5
+
+    def __post_init__(self):
+        self.position = Position(self.position)
+        self.opacity = float(self.opacity)
+        self.radius = int(self.radius)
+        self.kernel_size = int(self.kernel_size)
 
 
 @dataclass
 class AnnotationConfig:
-    labels: Union[Dict[int, str], Dict]
-    bbox_thickness: int = 2
-    bbox_text_scale: float = 0.3
-    bbox_text_padding: int = 5
-    polygon_thickness: int = 1
-    polygon_text_scale: float = 0.3
-    polygon_text_padding: int = 5
-    trace_line_thickness: int = 2
+    resolution: Tuple[int, int]
+    polygon: Union[PolygonConfig, Dict]
+    bounding_box: Union[BoundingBoxConfig, Dict]
+    tracing: Union[TracingConfig, Dict]
+    labeling: Union[LabelingConfig, Dict]
+    heatmap: Union[HeatMapConfig, Dict]
 
     def __post_init__(self):
-        labels = {}
-        for key, value in self.labels.items():
-            labels[int(key)] = str(value)
-        self.labels = labels
+        if len(self.resolution) != 2:
+            raise ValueError("Resolution should have 2 elements")
+        if self.resolution[0] < 64 or self.resolution[1] < 64:
+            raise ValueError("Resolutions should be greater than 64")
+        self.resolution = (int(self.resolution[0]), int(self.resolution[1]))
+        self.polygon = PolygonConfig(**self.polygon)
+        self.bounding_box = BoundingBoxConfig(**self.bounding_box)
+        self.tracing = TracingConfig(**self.tracing)
+        self.labeling = LabelingConfig(**self.labeling)
+        self.heatmap = HeatMapConfig(**self.heatmap)
 
 
 @dataclass
-class FilterRegion:
+class Region:
     polygon: np.ndarray
     triggering_position: Position = Position.CENTER
 
@@ -68,23 +136,16 @@ class FilterRegion:
 
 @dataclass
 class SessionConfig:
-    resolution: Tuple[int, int]
     tracker_config: Union[TrackerConfig, Dict]
-    trace_config: Union[TraceConfig, Dict]
     annotation_config: Union[AnnotationConfig, Dict]
-    filter_regions: Dict[str, FilterRegion]
+    regions_config: Dict[str, Region]
 
     def __post_init__(self):
-        if len(self.resolution) != 2:
-            raise ValueError("Resolution should have 2 elements")
-        if self.resolution[0] < 64 or self.resolution[1] < 64:
-            raise ValueError("Resolutions should be greater than 64")
         self.tracker_config = TrackerConfig(**self.tracker_config)
-        self.trace_config = TraceConfig(**self.trace_config)
         self.annotation_config = AnnotationConfig(**self.annotation_config)
-        self.filter_regions = {
-            region_name: FilterRegion(**region_config)
-            for region_name, region_config in self.filter_regions.items()
+        self.regions_config = {
+            region_name: Region(**region_config)
+            for region_name, region_config in self.regions_config.items()
         }
 
 

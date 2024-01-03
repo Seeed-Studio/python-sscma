@@ -59,35 +59,48 @@ Request body:
 
 ```json
 {
-    "resolution": [240, 240],
     "tracker_config": {
         "track_thresh": 0.25,
         "track_buffer": 30,
         "match_thresh": 0.8,
         "frame_rate": 30
     },
-    "trace_config": {
-        "trace_position": "CENTER",
-        "trace_length": 30
-    },
     "annotation_config": {
-        "labels": {
-            "0": "Person",
-            "1": "Car",
-            "2": "Bicycle",
-            "3": "Motorcycle",
-            "4": "Bus",
-            "5": "Truck"
+        "resolution": [240, 240],
+        "polygon": {
+            "thickness": 2,
+            "text_scale": 0.5,
+            "text_thickness": 1,
+            "text_padding": 3
         },
-        "bbox_thickness": 2,
-        "bbox_text_scale": 0.3,
-        "bbox_text_padding": 5,
-        "polygon_thickness": 1,
-        "polygon_text_scale": 0.3,
-        "polygon_text_padding": 5,
-        "trace_line_thickness": 2
+        "bounding_box": {
+            "thickness": 2
+        },
+        "tracing": {
+            "position": "CENTER",
+            "trace_length": 30,
+            "trace_thickness": 1
+        },
+        "labeling": {
+            "text_scale": 0.3,
+            "text_thickness": 1,
+            "text_padding": 3,
+            "text_position": "TOP_LEFT",
+            "label_map": {
+                "0": "Person",
+                "1": "Car",
+                "2": "Truck",
+                ...
+            }
+        },
+        "heatmap": {
+            "position": "BOTTOM_CENTER",
+            "opacity": 0.5,
+            "radius": 10,
+            "kernel_size": 5
+        }
     },
-    "filter_regions": {
+    "regions_config": {
         "Region A": {
             "polygon": [[12, 34], [56, 78], [90, 12], [34, 56]],
             "triggering_position": "CENTER"
@@ -95,7 +108,8 @@ Request body:
         "Region B": {
             "polygon": [[10, 10], [200, 10], [200,200], [10, 200], [30, 30]],
             "triggering_position": "CENTER"
-        }
+        },
+        ...
     }
 }
 ```
@@ -135,9 +149,20 @@ Request body:
 ```json
 {
     "boxes": [
-        [20, 23, 12, 24, 89, 0], [12, 34, 45, 56, 78, 1]
+        [20, 23, 12, 24, 89, 0],
+        [12, 34, 45, 56, 78, 1],
+        ...
     ],
-    "image": "data:image/any;base64,..."
+    "image": "data:image/any;base64,...",
+    "annotations": [
+        [
+            "polygon", "bounding_box", "tracing", "labeling"
+        ],
+        [
+            "polygon", "bounding_box", "tracing", "labeling", "heatmap"
+        ],
+        ...
+    ]
 }
 ```
 
@@ -155,9 +180,13 @@ Response:
     ],
     "filtered_regions": {
         "Region A": [],
-        "Region B": [2]
+        "Region B": [2],
+        ...
     },
-    "annotated_image": "data:image/png;base64,..."
+    "annotations": [
+        "data:image/png;base64,...",
+        ...
+    ]
 }
 ```
 
