@@ -490,7 +490,7 @@ class Device:
             _LOGGER.error("fetch model exception:{}".format(ex))
             return ModelInfo(None)
 
-        return ModelInfo(None)
+        return ModelInfo(model)
 
     # def _draw_classes(self, image, classes):
     #     """
