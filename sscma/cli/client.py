@@ -9,6 +9,8 @@ from sscma.micro.device import Device
 from sscma.micro.const import *
 from sscma.utils.image import  image_from_base64
 
+from sscma.hook.supervision import ClassAnnotartor
+
 import time
 
 logging.basicConfig(level=logging.CRITICAL)
@@ -49,73 +51,84 @@ def client(broker, username, password, device, port, baudrate, headless, draw, v
         triangle_annotator = sv.TriangleAnnotator()
         ellipse_annotator = sv.EllipseAnnotator()
         
+        class_annotator = ClassAnnotartor()
+        
         def on_monitor(device, msg):
-            global key
+               
+            if not headless:
+                frame = image_from_base64(msg["image"])
+                annotated_frame = frame.copy()
             
             if "boxes" in msg:
             
                 detections = sv.Detections.from_sscma_micro(msg)
-                if verbose:
-                    print(detections)
+                
+                if verbose or headless:
+                    click.echo(detections)
                     
+                if 'boxes' in draw:
+                    annotated_frame = box_annotator.annotate(
+                        annotated_frame, detections=detections
+                    )
+                    
+                if 'trace' in draw:
+                    detections = tracker.update_with_detections(detections)
+                    labels = [
+                    f"#{tracker_id} {device.model.classes[class_id]}:{confidence:.2f}"
+                        for class_id, tracker_id, confidence 
+                        in zip(detections.class_id, detections.tracker_id, detections.confidence)
+                    ]
+                    annotated_frame = trace_annotator.annotate(
+                        annotated_frame, detections=detections)
+                else:
+                    labels = [
+                    f"{device.model.classes[class_id]}:{confidence:.2f}"
+                        for class_id, confidence
+                        in zip(detections.class_id, detections.confidence)
+                    ] 
+                
+                if 'label' in draw:
+                    annotated_frame = label_annotator.annotate(
+                        annotated_frame, detections=detections, labels=labels)
+                
+                if 'heatmap' in draw:
+                    annotated_frame = heat_map_annotator.annotate(
+                            annotated_frame, detections=detections)
+                
+                if 'color' in draw:
+                    annotated_frame = color_annotator.annotate(
+                        annotated_frame, detections=detections)
+                
+                if 'circle' in draw:
+                    annotated_frame = circle_annotator.annotate(
+                        annotated_frame, detections=detections)
+                        
+                if 'dot' in draw:
+                    annotated_frame = dot_annotator.annotate(
+                        annotated_frame, detections=detections)
+                    
+                if 'triangle' in draw:
+                    annotated_frame = triangle_annotator.annotate(
+                        annotated_frame, detections=detections)
+                        
+                if 'ellipse' in draw:
+                    annotated_frame = ellipse_annotator.annotate(
+                        annotated_frame, detections=detections)
+                       
+            if "classes" in msg:
+                classifications  = sv.Classifications.from_sscma_micro_cls(msg)
+                if verbose or headless:
+                    click.echo(classifications)
                     
                 if not headless:
-                    frame = image_from_base64(msg["image"])
-                    
-                    annotated_frame = frame.copy()
-                    
-                    if 'boxes' in draw:
-                        annotated_frame = box_annotator.annotate(
-                            annotated_frame, detections=detections
-                        )
-                    
-                    if 'trace' in draw:
-                        detections = tracker.update_with_detections(detections)
-                        labels = [
-                        f"#{tracker_id} {device.model.classes[class_id]}:{confidence:.2f}"
-                            for class_id, tracker_id, confidence 
-                            in zip(detections.class_id, detections.tracker_id, detections.confidence)
-                        ]
-                        annotated_frame = trace_annotator.annotate(
-                            annotated_frame, detections=detections)
-                    else:
-                        labels = [
-                        f"{device.model.classes[class_id]}:{confidence:.2f}"
-                            for class_id, confidence
-                            in zip(detections.class_id, detections.confidence)
-                        ] 
-                    
-                    if 'label' in draw:
-                        annotated_frame = label_annotator.annotate(
-                            annotated_frame, detections=detections, labels=labels)
-                    
-                    if 'heatmap' in draw:
-                        annotated_frame = heat_map_annotator.annotate(
-                                annotated_frame, detections=detections)
-                    
-                    if 'color' in draw:
-                        annotated_frame = color_annotator.annotate(
-                            annotated_frame, detections=detections)
-                    
-                    if 'circle' in draw:
-                        annotated_frame = circle_annotator.annotate(
-                            annotated_frame, detections=detections)
-                        
-                    if 'dot' in draw:
-                        annotated_frame = dot_annotator.annotate(
-                            annotated_frame, detections=detections)
-                        
-                    if 'triangle' in draw:
-                        annotated_frame = triangle_annotator.annotate(
-                            annotated_frame, detections=detections)
-                        
-                    if 'ellipse' in draw:
-                        annotated_frame = ellipse_annotator.annotate(
-                            annotated_frame, detections=detections)
-        
-                    cv2.imshow("frame", annotated_frame)
-                    if cv2.waitKey(1) & 0xFF == 27:
-                       device.loop_stop()
+                    annotated_frame = class_annotator.annotate(
+                        scene=annotated_frame, classifications=classifications, labels=device.model.classes
+                    )
+                
+            if not headless:
+                cv2.imshow("frame", annotated_frame)
+                if cv2.waitKey(1) & 0xFF == 27:
+                    device.loop_stop()
             
         def on_connect(device):
             device.invoke(-1, False, True)
@@ -126,13 +139,18 @@ def client(broker, username, password, device, port, baudrate, headless, draw, v
         device.on_monitor = on_monitor
         click.echo("Waiting for device to be ready")
         device.loop_start()
-        while True:
-            time.sleep(1)
-            if not device.is_alive():
-                break
-            if device.status != DeviceStatus.READY:
-                print(".", end="", flush=True)
-                break
+        
+        try:
+            while True:
+                time.sleep(1)
+                if not device.is_alive():
+                    break
+                if device.status != DeviceStatus.READY:
+                    print(".", end="", flush=True)
+                    break
+        except KeyboardInterrupt:
+            device.loop_stop()
+            
     except Exception as e:
         click.echo("Error: {}".format(e))
         traceback.print_exc()
