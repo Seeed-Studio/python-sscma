@@ -52,6 +52,21 @@ CMD_ENOTSUP: Final[int] = 8
 CMD_EPERM: Final[int] = 9
 CMD_EUNKNOWN: Final[int] = 10
 
+# command error Strings
+CMD_ERROR_STRINGS: Final[dict] = {
+    CMD_OK: "OK",
+    CMD_AGAIN: "AGAIN",
+    CMD_ELOG: "ELOG",
+    CMD_ETIMEDOUT: "ETIMEDOUT",
+    CMD_EIO: "EIO",
+    CMD_EINVAL: "EINVAL",
+    CMD_ENOMEM: "ENOMEM",
+    CMD_EBUSY: "EBUSY",
+    CMD_ENOTSUP: "ENOTSUP",
+    CMD_EPERM: "EPERM",
+    CMD_EUNKNOWN: "EUNKNOWN"
+}
+
 
 # command parameters
 WIFI_ENC_AUTO: Final[int] = 0

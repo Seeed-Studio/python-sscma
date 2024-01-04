@@ -196,6 +196,9 @@ class Client:
 
             if not wait_event or listener.response is not None:
                 break
+            
+        if listener.response is None and wait_event:
+            _LOGGER.error("send_command:{} timeout".format(command))
 
         return listener.response
 
@@ -220,11 +223,7 @@ class Client:
         else:
             command = "{}{}={}".format(CMD_PREFIX, command, value)
 
-        response = self.send_command(command, wait_event, timeout)
-        if response is None:
-            return None
-        else:
-            return response
+        return self.send_command(command, wait_event, timeout)
 
     def get(self, command, tag=True, wait_event=True, timeout=None):
         """
@@ -245,11 +244,7 @@ class Client:
         else:
             command = "{}{}?".format(CMD_PREFIX, command)
 
-        response = self.send_command(command, wait_event, timeout)
-        if response is None:
-            return None
-        else:
-            return response
+        return  self.send_command(command, wait_event, timeout)
 
     def execute(self, command, tag=False, wait_event=False, timeout=None):
         """
@@ -269,11 +264,8 @@ class Client:
         else:
             command = "{}{}".format(CMD_PREFIX, command)
 
-        response = self.send_command(command, wait_event, timeout)
-        if response is None:
-            return None
-        else:
-            return response
+        return self.send_command(command, wait_event, timeout)
+
 
     def on_recieve(self, msg):
         """
