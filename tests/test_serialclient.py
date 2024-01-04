@@ -42,7 +42,7 @@ label_annotator = sv.LabelAnnotator(text_scale=0.3, text_padding=2)
 box_annotator = sv.BoundingBoxAnnotator()
 trace_annotator = sv.TraceAnnotator()
 
-def monitor_handler(msg):
+def monitor_handler(device, msg):
     frame = image_from_base64(msg["image"])
     detections = sv.Detections.from_sscma_micro(msg)
     detections = tracker.update_with_detections(detections)

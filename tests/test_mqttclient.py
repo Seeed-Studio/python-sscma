@@ -31,7 +31,7 @@ def on_message(client, tclient, msg):
     tclient.on_recieve(msg.payload)
 
 
-def monitor_handler(msg):
+def monitor_handler(device, msg):
 
     if "image" in msg:
         jpeg_bytes = base64.b64decode(msg["image"])

@@ -404,12 +404,15 @@ class MQTTClient(Client):
 
         for key in kwargs:
             if key == "username":
-                self._client.username_pw_set(
-                    kwargs["username"], kwargs["password"])
+                if kwargs["username"] is not None:
+                    self._client.username_pw_set(
+                        kwargs["username"], kwargs["password"])
                 break
 
         self._client.connect(self._host, self._port, 120)
-        super().__init__(lambda msg: self._client.publish(self._tx_topic, msg))
+        super().__init__(lambda msg: self._client.publish(
+            self._tx_topic, msg, qos=0))
+        
 
     def __on_recieve(self, client, userdata, msg):
         self.on_recieve(msg.payload)

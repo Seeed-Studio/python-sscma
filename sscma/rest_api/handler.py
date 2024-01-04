@@ -13,9 +13,10 @@ from supervision import Detections
 from .session_manager import SessionManager
 from .utils import (
     parse_bytes_to_json,
-    SessionConfig,
-    image_from_base64,
+    SessionConfig
 )
+
+from sscma.utils.image import image_from_base64
 
 shared_session_manager = SessionManager()
 
@@ -100,8 +101,8 @@ class HTTPHandler(http.server.SimpleHTTPRequestHandler):
                         image = image_from_base64(request["image"])
                     except Exception as exc:  # pylint: disable=broad-except
                         logging.warning("Failed to parse image", exc_info=exc)
-                        image = None
-                response = session.push(detections, image)
+                annotations = request["annotations"] if "annotations" in request else None
+                response = session.push(detections, image, annotations)
 
                 self.send_response(HTTPStatus.OK)
                 self.send_header("Content-Type", "application/json")
