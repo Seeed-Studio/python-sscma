@@ -17,13 +17,14 @@ from supervision import (
     ColorPalette,
 )
 
+from sscma.utils.image import image_to_base64
+
 from .utils import (
     SessionConfig,
     detection_to_tracked_bboxs,
     color_from_cmap,
 )
 
-from sscma.utils.image import image_to_base64
 
 class Pipeline:
     def __init__(self, config: SessionConfig):
@@ -40,7 +41,9 @@ class Pipeline:
         annotation_config = config.annotation_config
         self.canva_resolution = annotation_config.resolution[:2]
         self.canvas = {}
-        self.canvas["background"] = np.zeros((*self.canva_resolution, 4), dtype=np.uint8)
+        self.canvas["background"] = np.zeros(
+            (*self.canva_resolution, 4), dtype=np.uint8
+        )
         polygon_canva = self.canvas["background"].copy()
         polygon_color_platte = ColorPalette.from_hex(color_from_cmap("Pastel2"))
         self.filter_regions = {}
@@ -91,6 +94,9 @@ class Pipeline:
         )
 
     def __annotate(self, detections: dict, annotator_name: str) -> np.ndarray:
+        if annotator_name == "background":
+            return self.canvas["background"]
+
         if annotator_name == "polygon":
             return self.canvas["polygon"]
 
@@ -104,15 +110,15 @@ class Pipeline:
 
         if annotator_name == "labeling":
             return self.label_annotator.annotate(
-                    scene=self.canvas["background"].copy(),
-                    detections=detections,
-                    labels=[
-                        f"#{tracker_id} {self.label_map[class_id] if class_id in self.label_map else class_id}"
-                        for class_id, tracker_id in zip(
-                            detections.class_id, detections.tracker_id
-                        )
-                    ],
-                )
+                scene=self.canvas["background"].copy(),
+                detections=detections,
+                labels=[
+                    f"#{tracker_id} {self.label_map[class_id] if class_id in self.label_map else class_id}"
+                    for class_id, tracker_id in zip(
+                        detections.class_id, detections.tracker_id
+                    )
+                ],
+            )
 
         if annotator_name == "heatmap":
             return self.heatmap_annontator.annotate(
@@ -121,16 +127,14 @@ class Pipeline:
 
         raise NotImplementedError(f"Annotator {annotator_name} is not implemented")
 
-
     def push(
-        self, detections: dict, background: np.ndarray = None, annotations: List[List[str]] = None
+        self,
+        detections: dict,
+        background: np.ndarray = None,
+        annotations: List[List[str]] = None,
     ) -> dict:
         with self.lock:
-            result = {
-                "filtered_regions": {},
-                "annotations": [],
-                "tracked_boxes": []
-            }
+            result = {"filtered_regions": {}, "annotations": [], "tracked_boxes": []}
             try:
                 detections = self.tracker.update_with_detections(detections)
 
@@ -147,19 +151,34 @@ class Pipeline:
                 )
 
                 if annotations is not None:
-                    canvas = self.canvas
+                    canvas = self.canvas.copy()
                     for annotation in annotations:
-                        blending = background if background is not None else canvas["background"].copy()
+                        blending = (
+                            background
+                            if background is not None
+                            else canvas["background"].copy()
+                        )
+                        w, h, c = blending.shape[:3]
                         for annotator in annotation:
                             if annotator not in self.annotators:
-                                logging.warning("Annotator %s is not implemented", annotator)
+                                logging.warning(
+                                    "Annotator %s is not implemented", annotator
+                                )
                                 continue
                             if annotator not in canvas:
-                                canvas[annotator] = self.__annotate(detections, annotator)
-                            w, h, c = np.minimum(canvas[annotator].shape[:3], blending.shape[:3])[:3]
-                            blending = cv2.add(blending[:w, :h, :c], canvas[annotator][:w, :h, :c])
+                                canvas[annotator] = self.__annotate(
+                                    detections, annotator
+                                )
+                            w, h, c = np.minimum(
+                                canvas[annotator].shape[:3], blending.shape[:3]
+                            )[:3]
+                            blending = cv2.add(
+                                blending[:w, :h, :c], canvas[annotator][:w, :h, :c]
+                            )
                         if c == 4:
-                            blending[np.any(blending[:, :, :3] != 0, axis=-1), 3] = np.iinfo(blending.dtype).max
+                            blending[
+                                np.any(blending[:, :, :3] != 0, axis=-1), 3
+                            ] = np.iinfo(blending.dtype).max
                         result["annotations"].append(image_to_base64(blending))
 
                 result["tracked_boxes"] = detection_to_tracked_bboxs(detections)
