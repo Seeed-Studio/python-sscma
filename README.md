@@ -17,87 +17,87 @@ More information about the sscma_micro can be found at
 ```bash
 pip install python-sscma
 ```
-```python
-from sscma.micro.client import Client, SerialClient
-from sscma.micro.device import Device
-from sscma.micro.const import *
-import serial
-import threading
-import time
-import logging
-import signal
-import cv2
-import base64
-import numpy as np
 
-logging.basicConfig(level=logging.DEBUG)
+```bash
+sscma.cli --help
+Usage: sscma.cli [OPTIONS] COMMAND [ARGS]...
 
-_LOGGER = logging.getLogger(__name__)
+Options:
+  --help  Show this message and exit.
 
+Commands:
+  client
+  flasher
+  server
+```
 
-def monitor_handler(msg):
-    if "image" in msg:
-        jpeg_bytes = base64.b64decode(msg["image"])
+### Client
 
-        # Convert the bytes into a numpy array
-        nparr = np.frombuffer(jpeg_bytes, np.uint8)
+```bash
+sscma.cli client --help
+Usage: sscma.cli client [OPTIONS]
 
-        # Decode the image array using OpenCV
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+Options:
+  -b, --broker TEXT               MQTT broker address
+  -u, --username TEXT             MQTT username
+  -p, --password TEXT             MQTT password
+  -d, --device TEXT               Device ID
+  -p, --port TEXT                 Port to connect to
+  -b, --baudrate INTEGER          Baud rate for the serial connection
+  -h, --headless                  Show the image
+  -d, --draw [boxes|color|label|circle|dot|triangle|ellipse|trace|heatmap]
+                                  Draw options
+  -v, --verbose                   Show the result
+  --help                          Show this message and exit.
+```
 
-        # Display the image
-        cv2.imshow('Base64 Image', img)
-        cv2.waitKey(1)
-        msg.pop("image")
-    print(msg)
+#### Client with Serial
 
+```bash
+sscma.cli client -d /dev/ttyUSB0  -d boxes
+```
 
-def on_device_connect(device):
-    print("device connected")
-    device.invoke(-1, False, True)
-    device.tscore = 70
-    device.tiou = 70
+#### Client with MQTT
 
+```bash
+sscma.cli client -b mqtt.broker.com -u username -p password -d device_id -d boxes
+```
 
-client = SerialClient("COM83")
+### Flasher
 
-def signal_handler(signal, frame):
-    print("Ctrl+C pressed!")
-    client.loop_stop()
-   
-def main():
+```bash
+sscma.cli flasher --help
+Usage: sscma.cli flasher [OPTIONS]
 
-    signal.signal(signal.SIGINT, signal_handler)
- 
-    device = Device(client)
-
-    device.on_monitor = monitor_handler
-    device.on_connect = on_device_connect
-     
-    device.loop_start()
-
-    print(device.info)
-
-    i = 60
-
-    while True:
-        print(device.wifi)
-        print(device.mqtt)
-        print(device.info)
-        print(device.model)
-        device.tscore = i
-        device.tiou = i
-        i = i + 1
-        if i > 100:
-            i = 30
-
-        time.sleep(2)
-
-
-if __name__ == "__main__":
-    main()
+Options:
+  -p, --port TEXT         Port to connect to
+  -f, --file TEXT         File to write to the device
+  -b, --baudrate INTEGER  Baud rate for the serial connection
+  -o, --offset TEXT       Offset to write the file to
+  --help 
+```
 
 ```
+sscma.cli flasher -p /dev/ttyUSB0 -f firmware.bin 
+```
+
+### Server
+
+```bash
+sscma.cli server --help
+Usage: sscma.cli server [OPTIONS]
+
+Options:
+  --host TEXT            Host to run the server on
+  --port INTEGER         Port to run the server on
+  --ssl                  Use SSL for the server
+  --ssl-certfile TEXT    SSL certificate file
+  --ssl-keyfile TEXT     SSL key file
+  --max-workers INTEGER  Maximum number of worker threads
+  --help                 Show this message and exit.
+```
+More information about the server can be found at [here](./docs/server.md)
+
 
 ## Contributing
 
