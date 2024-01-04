@@ -52,7 +52,7 @@ def monitor_handler(device, msg):
 
 def on_device_connect(device):
     print("device connected")
-    device.invoke(-1, False, True)
+    device.Invoke(-1, False, True)
     device.tscore = 50
     device.tiou = 35
 

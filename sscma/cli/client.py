@@ -13,7 +13,7 @@ from sscma.hook.supervision import ClassAnnotartor
 
 import time
 
-logging.basicConfig(level=logging.CRITICAL)
+logging.basicConfig(level=logging.INFO)
 valid_draw_options = ['boxes', 'color', 'label', 'circle', 'dot', 'triangle', 'ellipse',  'trace', 'heatmap']
 
 @click.command()
@@ -54,6 +54,9 @@ def client(broker, username, password, device, port, baudrate, headless, draw, v
         class_annotator = ClassAnnotartor()
         
         def on_monitor(device, msg):
+            
+            if "image" not in msg:
+                return
                
             if not headless:
                 frame = image_from_base64(msg["image"])
@@ -131,12 +134,21 @@ def client(broker, username, password, device, port, baudrate, headless, draw, v
                     device.loop_stop()
             
         def on_connect(device):
-            device.invoke(-1, False, True)
             click.echo("Device connected")
             click.echo("\nEnter'ESC' to exit\n")
+            device.Invoke(-1, False, True)
+            
+        def on_disconnect(device):
+            click.echo("Device disconnected")
+            
+        def on_log(device, log):
+            click.echo(log)
+
             
         device.on_connect = on_connect
+        device.on_disconnect = on_disconnect
         device.on_monitor = on_monitor
+        device.on_log = on_log
         click.echo("Waiting for device to be ready")
         device.loop_start()
         
