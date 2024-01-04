@@ -154,15 +154,12 @@ def client(broker, username, password, device, port, baudrate, headless, draw, v
         
         try:
             while True:
-                time.sleep(1)
+                time.sleep(2)
                 if not device.is_alive():
-                    break
-                if device.status != DeviceStatus.READY:
-                    print(".", end="", flush=True)
+                    click.echo("Exited")
                     break
         except KeyboardInterrupt:
             device.loop_stop()
-            
     except Exception as e:
         click.echo("Error: {}".format(e))
         traceback.print_exc()
