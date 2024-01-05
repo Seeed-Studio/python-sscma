@@ -35,7 +35,7 @@ logging.basicConfig(level=logging.DEBUG)
 _LOGGER = logging.getLogger(__name__)
 
 
-def monitor_handler(msg):
+def monitor_handler(device, msg):
     if "image" in msg:
         jpeg_bytes = base64.b64decode(msg["image"])
 
@@ -54,7 +54,7 @@ def monitor_handler(msg):
 
 def on_device_connect(device):
     print("device connected")
-    device.invoke(-1, False, True)
+    device.Invoke(-1, False, True)
     device.tscore = 70
     device.tiou = 70
 

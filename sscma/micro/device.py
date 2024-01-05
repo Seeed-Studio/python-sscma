@@ -11,7 +11,7 @@ from .const import *
 from .client import Client
 from .info import DeviceInfo, ModelInfo, WiFiInfo, MQTTInfo
 
-from threading import Timer, Thread
+from threading import Timer, Thread, current_thread
 
 import traceback
 
@@ -23,7 +23,7 @@ class Device:
     Represents a device that can communicate with the SSCMA system.
     """
 
-    _heartbeat = 1
+    _heartbeat = 2
     _timeout = 5
     _keepalive = 60
 
@@ -53,6 +53,7 @@ class Device:
         self._fliter = False
 
         self._on_connect = None
+        self._on_disconnect = None
         self._on_monitor = None
         self._on_log = None
 
@@ -62,10 +63,11 @@ class Device:
         self._timeout = timeout
         self._keepalive = keepalive
         self._heartbeat = heartbeat
-        self._last_event_time = 0
-        self._last_alive_time = 0
+        self._last_event_time = time.time()
+        self._last_alive_time = time.time()
 
         self._timer = None
+        
 
         self._daemon_thread = None
         self._deamon = False
@@ -75,30 +77,35 @@ class Device:
         self._deamon = True
         while self._deamon:
             time.sleep(self._heartbeat)
+            
             # if device is sampling, check if sample is satisfied
             if self._status & DeviceStatus.SAMPLING:
                 if time.time() - self._last_event_time > self._timeout:
-                    _LOGGER.debug("Device sample timeout, Resample")
-                    self.sample = self._sample
+                    _LOGGER.warning("Device sample timeout, Resample")
+                    self.Sample(self._sample)
                     continue
                 
             if self._status & DeviceStatus.INVOKING:
                 if time.time() - self._last_event_time > self._timeout:
-                    _LOGGER.debug("Device invoke timeout, Reinvoke")
-                    self.invoke(self._invoke, self._fliter, self._show)
+                    _LOGGER.warning("Device invoke timeout, Reinvoke")
+                    self.Invoke(self._invoke, self._fliter, self._show)
                     continue
             
             # if device is ready, check if device is lost
             if self._status & DeviceStatus.READY and time.time() - self._last_alive_time > self._keepalive:
-                id = self._client.get(CMD_AT_ID, timeout=0.5)
+                id = self._client.get(CMD_AT_ID)
                 if id is None:
                     self._status = DeviceStatus.UNKNOWN
-                    _LOGGER.debug("Device lost, Reinitialize")
-                    self.initialize()
+                    _LOGGER.warning("Device lost, Reset")
+                    self.Reset()
                 else:
                     self._last_alive_time = time.time()
                     
 
+    def is_alive(self):
+        """Return True if the device is ready."""
+        return self._daemon_thread is not None and self._daemon_thread.is_alive()
+    
     def check_status(status):
         """Decorator to check if the device is ready."""
 
@@ -122,7 +129,7 @@ class Device:
 
         if hasattr(self._client, "loop_start"):
             self._client.loop_start()
-
+        
         self._daemon_thread = Thread(target=self.daemon)
         self._daemon_thread.start()
 
@@ -132,14 +139,19 @@ class Device:
         """Stop the device loop. """
         
         self._status = DeviceStatus.UNKNOWN
-        self.Break()
         
-        self._deamon = False
-        self._daemon_thread.join()
+        if self._timer is not None:
+            self._timer.cancel()
+        
+        self.Break()
         
         if hasattr(self._client, "loop_stop"):
             self._client.loop_stop()
         
+        self._deamon = False
+        if self._daemon_thread is not None and current_thread() != self._daemon_thread:
+            self._daemon_thread.join()
+            self._daemon_thread = None
 
 
     def initialize(self):
@@ -152,10 +164,11 @@ class Device:
         self._info = self._fetch_info()
         if self._info is None:
             self._status = DeviceStatus.UNKNOWN
-            self._timer = Timer(self._timeout, self.initialize)
+            self._timer = Timer(self._heartbeat, self.initialize)
             self._timer.start()
             return
-
+        
+        self._timer = None
         self._client.on_event = self._event_process
         self._client.on_log = self._log_process
 
@@ -179,6 +192,16 @@ class Device:
     def on_connect(self, value):
         """Set the on_connect callback."""
         self._on_connect = value
+        
+    @property
+    def on_disconnect(self):
+        """Return the on_disconnect callback."""
+        return self._on_disconnect
+    
+    @on_disconnect.setter
+    def on_disconnect(self, value):
+        """Set the on_disconnect callback."""
+        self._on_disconnect = value
 
     @property
     def on_monitor(self):
@@ -194,6 +217,11 @@ class Device:
     def on_log(self):
         """Return the on_log callback."""
         return self._on_log
+    
+    @on_log.setter
+    def on_log(self, value):
+        """Set the on_log callback."""
+        self._on_log = value
 
     @property
     def status(self) -> int:
@@ -270,9 +298,12 @@ class Device:
 
     def Reset(self) -> None:
         """Reset the device."""
-        self._client.execute(CMD_AT_RESET)
-        self._status &= ~DeviceStatus.SAMPLING
-        self._status &= ~DeviceStatus.INVOKING
+        _LOGGER.warning("Device reset")
+        if self._on_disconnect is not None:
+            self._on_disconnect(self)
+        self._status = DeviceStatus.UNKNOWN
+        self._client.execute(CMD_AT_RESET)    
+        self.initialize()
 
     @property
     @check_status(DeviceStatus.READY)
@@ -286,29 +317,37 @@ class Device:
         else:
             return None
 
-    @sample.setter
     @check_status(DeviceStatus.READY)
-    def sample(self, value):
+    def Sample(self, value):
         """
         Sets the sample of the device.
         """
+        
+        self._last_event_time = time.time()
+        
         response = self._client.set(CMD_AT_SAMPLE, '{}'.format(value))
-        if response is not None and response["code"] == CMD_OK:
+        
+        if response is None:
+            return None
+        
+        if response["code"] == CMD_OK:
             self._sample = value
             if value != 0:
                 self._status |= DeviceStatus.SAMPLING
                 self._status &= ~DeviceStatus.INVOKING
-            return response["data"]
         else:
-            return None
+            _LOGGER.error("sample error: {}".format(CMD_ERROR_STRINGS[response["code"]]))
+            self.Reset()
+        
+        return response["data"]
+        
 
     @property
     @check_status(DeviceStatus.READY)
-    def invoke_status(self):
+    def invoke(self):
         """
         Gets the invoke status of the device.
         """
-
         response = self._client.get(CMD_AT_INVOKE)
         if response is not None and response["code"] == CMD_OK:
             return True if response['data'] == 1 else False
@@ -316,24 +355,34 @@ class Device:
             return None
 
     @check_status(DeviceStatus.READY)
-    def invoke(self, value, filter=False, show=True):
+    def Invoke(self, value, filter=False, show=True):
         """
         Sets the invoke of the device.
         """
+        
+        self._last_event_time = time.time()
+        
         if self._model is None:
             self._model = self._fetch_model()
+            
         response = self._client.set(CMD_AT_INVOKE, '{},{},{}'.format(
             value, 1 if filter else 0, 0 if show else 1))
-        if response is not None and response["code"] == CMD_OK:
+        
+        if response is None:
+            return None
+        
+        if response["code"] == CMD_OK:
             self._invoke = value
             self._fliter = filter
             self._show = show
             if value != 0:
                 self._status |= DeviceStatus.INVOKING
                 self._status &= ~DeviceStatus.SAMPLING
-            return response["data"]
         else:
-            return None
+            _LOGGER.error("invoke error: {}".format(CMD_ERROR_STRINGS[response["code"]]))
+            self.Reset()
+                    
+        return response["data"]
 
     @property
     @check_status(DeviceStatus.READY | DeviceStatus.INVOKING)
@@ -422,7 +471,7 @@ class Device:
 
     def _fetch_info(self) -> DeviceInfo:
         """Fetch device info from the device."""
-        id = self._client.get(CMD_AT_ID, timeout=0.5)
+        id = self._client.get(CMD_AT_ID)
         if id is None or id["data"] == "":
             self._status = DeviceStatus.UNKNOWN
             return None
@@ -448,6 +497,8 @@ class Device:
             else:
                 self._status &= ~DeviceStatus.WIFI_CONNECTED
                 self._status |= DeviceStatus.WIFI_CONNECTTING
+        else:
+            return None
 
         self._wifi_changed = False
         return WiFiInfo(wifi["data"])
@@ -462,9 +513,12 @@ class Device:
             else:
                 self._status &= ~DeviceStatus.MQTT_CONNECTED
                 self._status |= DeviceStatus.MQTT_CONNECTTING
-        pubsub = self._client.get(CMD_AT_MQTTPUBSUB)
-        self._mqtt_changed = False
-        return MQTTInfo(MQTTInfo.construct(server["data"], pubsub["data"]))
+            pubsub = self._client.get(CMD_AT_MQTTPUBSUB)
+            self._mqtt_changed = False
+            return MQTTInfo(MQTTInfo.construct(server["data"], pubsub["data"]))
+        else:
+            self._mqtt_changed = False
+            return MQTTInfo(None)
 
     def _fetch_model(self) -> ModelInfo:
         """Fetch model info from the device."""
@@ -476,7 +530,7 @@ class Device:
             model = json.loads(base64.b64decode(response["data"]["info"]))
         except Exception as ex:
             _LOGGER.error("fetch model exception:{}".format(ex))
-            return None
+            return ModelInfo(None)
 
         return ModelInfo(model)
 
@@ -602,7 +656,7 @@ class Device:
         """Process an event."""
         try:
             
-            self._last_event_time = time.time()
+            
             self._last_alive_time = time.time()
 
             if EVENT_INVOKE in event["name"]:
@@ -612,6 +666,13 @@ class Device:
 
                 if self._invoke == 0:
                     self._status &= ~DeviceStatus.INVOKING
+                
+                if event["code"] == CMD_OK:
+                    self._last_event_time = time.time()
+                else:
+                    _LOGGER.error("invoke error: {}".format(CMD_ERROR_STRINGS[event["code"]]))
+                    self.Reset()
+                    
 
             if EVENT_SAMPLE in event["name"]:
 
@@ -620,12 +681,19 @@ class Device:
 
                 if self._sample == 0:
                     self._status &= ~DeviceStatus.SAMPLING
+                
+                if event["code"] == CMD_OK:
+                    self._last_event_time = time.time()
+                else:
+                    _LOGGER.error("sample error: {}".format(CMD_ERROR_STRINGS[event["code"]]))
+                    self.Reset()
+  
 
             if self._on_monitor is not None:
 
                 reply = event["data"]
 
-                # draw image
+                #draw image
                 if "image" in event["data"] and event["data"]["image"]:
 
                     ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -650,7 +718,7 @@ class Device:
                         buf.getvalue()).decode('utf-8')
                     reply["image"] = base64_image
 
-                self._on_monitor(reply)
+                self._on_monitor(self, reply)
 
                 return
 
@@ -663,4 +731,4 @@ class Device:
     def _log_process(self, log):
         """Process a log."""
         if self._on_log is not None:
-            self._on_log(log)
+            self._on_log(self, log)

@@ -17,9 +17,9 @@ _LOGGER = logging.getLogger(__name__)
 
 
 # 定义代理服务器和主题
-broker_address = "192.168.199.230"
-rx_topic = "sscma/v0/grove_vision_ai_we2_51b078b9/tx"
-tx_topic = "sscma/v0/grove_vision_ai_we2_51b078b9/rx"
+broker_address = "192.168.6.149"
+rx_topic = "sscma/v0/grove_vision_ai_we2_bdf65343/tx"
+tx_topic = "sscma/v0/grove_vision_ai_we2_bdf65343/rx"
 
 
 def on_connect(client, userdata, flags, rc):
@@ -31,7 +31,7 @@ def on_message(client, tclient, msg):
     tclient.on_recieve(msg.payload)
 
 
-def monitor_handler(msg):
+def monitor_handler(device, msg):
 
     if "image" in msg:
         jpeg_bytes = base64.b64decode(msg["image"])
@@ -52,13 +52,13 @@ def monitor_handler(msg):
 
 def on_device_connect(device):
     print("device connected")
-    device.invoke(-1, False, True)
+    device.Invoke(-1, False, True)
     device.tscore = 50
     device.tiou = 35
 
 
 device = Device(MQTTClient(host=broker_address, port=1883, tx_topic=tx_topic,
-                           rx_topic=rx_topic, username="user", password="user"))
+                           rx_topic=rx_topic, username="sscma", password="sscma"))
 
 
 def signal_handler(signal, frame):
