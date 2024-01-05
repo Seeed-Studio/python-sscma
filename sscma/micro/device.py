@@ -22,8 +22,8 @@ class Device:
     Represents a device that can communicate with the SSCMA system.
     """
 
-    _heartbeat = 1
-    _timeout = 2
+    _heartbeat = 2
+    _timeout = 5
     _keepalive = 60
 
     def __init__(self,
@@ -81,7 +81,7 @@ class Device:
             if self._status & DeviceStatus.SAMPLING:
                 if time.time() - self._last_event_time > self._timeout:
                     _LOGGER.warning("Device sample timeout, Resample")
-                    self.sample = self._sample
+                    self.Sample(self._sample)
                     continue
                 
             if self._status & DeviceStatus.INVOKING:
@@ -163,7 +163,7 @@ class Device:
         self._info = self._fetch_info()
         if self._info is None:
             self._status = DeviceStatus.UNKNOWN
-            self._timer = Timer(self._timeout, self.initialize)
+            self._timer = Timer(self._heartbeat, self.initialize)
             self._timer.start()
             return
         
