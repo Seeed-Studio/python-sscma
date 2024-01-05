@@ -25,7 +25,7 @@ class Device:
 
     _heartbeat = 2
     _timeout = 5
-    _keepalive = 20
+    _keepalive = 60
 
     def __init__(self,
                  client: Client = None,
