@@ -38,17 +38,24 @@ sscma.cli client --help
 Usage: sscma.cli client [OPTIONS]
 
 Options:
-  -b, --broker TEXT               MQTT broker address
-  -u, --username TEXT             MQTT username
-  -p, --password TEXT             MQTT password
-  -d, --device TEXT               Device ID
-  -p, --port TEXT                 Port to connect to
-  -b, --baudrate INTEGER          Baud rate for the serial connection
-  -h, --headless                  Show the image
+  -b, --broker TEXT               Specify the MQTT broker address
+  -u, --username TEXT             Specify the MQTT username
+  -p, --password TEXT             Specify the MQTT password
+  -d, --device TEXT               Specify the Device ID
+  -p, --port TEXT                 Specify the Port to connect to
+  -b, --baudrate INTEGER          Specify the Baudrate for the serial
+                                  connection
+  -s, --save [0|1|2]              Choose whether to save images. 0: Do not
+                                  save, 1: Save the original image, 2: Save
+                                  the original and annotated images.
+  -o, --save_dir TEXT             Specify the Drectory for saveing images
+  -h, --headless                  Run the program without displaying the
+                                  images
   -d, --draw [boxes|color|label|circle|dot|triangle|ellipse|trace|heatmap]
-                                  Draw options
-  -v, --verbose                   Show the result
-  --help                          Show this message and exit.
+                                  pecify the types of elements to draw in the
+                                  image
+  -v, --verbose                   Show detailed information during processin
+  --help 
 ```
 
 #### Client with Serial
@@ -61,6 +68,12 @@ sscma.cli client -d /dev/ttyUSB0  -d boxes
 
 ```bash
 sscma.cli client -b mqtt.broker.com -u username -p password -d device_id -d boxes
+```
+
+#### Sample 
+
+```bash
+sscmai client -d /dev/ttyUSB0  -d boxes --save 1
 ```
 
 ### Flasher
