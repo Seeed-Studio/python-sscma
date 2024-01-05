@@ -321,8 +321,7 @@ class Client:
                                 self._on_log(paylod)
 
             except Exception as ex:
-                _LOGGER.error("payload decode exception:{}".format(ex))
-
+                _LOGGER.warning("payload decode exception:{}".format(ex))
             finally:
                 self._msg_buffer = self._msg_buffer[self._msg_buffer.find(
                     RESPONSE_SUFFIX)+2:]

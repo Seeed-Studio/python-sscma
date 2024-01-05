@@ -59,8 +59,12 @@ def client(broker, username, password, device, port, baudrate, headless, draw, v
                 return
                
             if not headless:
-                frame = image_from_base64(msg["image"])
-                annotated_frame = frame.copy()
+                try:
+                    frame = image_from_base64(msg["image"])
+                    annotated_frame = frame.copy()
+                except Exception as e:
+                    return
+
             
             if "boxes" in msg:
             
