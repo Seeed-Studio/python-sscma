@@ -25,7 +25,7 @@ class Device:
 
     _heartbeat = 2
     _timeout = 5
-    _keepalive = 60
+    _keepalive = 20
 
     def __init__(self,
                  client: Client = None,
@@ -78,29 +78,30 @@ class Device:
         while self._deamon:
             time.sleep(self._heartbeat)
             
-            # if device is sampling, check if sample is satisfied
-            if self._status & DeviceStatus.SAMPLING:
-                if time.time() - self._last_event_time > self._timeout:
-                    _LOGGER.warning("Device sample timeout, Resample")
-                    self.Sample(self._sample)
-                    continue
-                
-            if self._status & DeviceStatus.INVOKING:
-                if time.time() - self._last_event_time > self._timeout:
-                    _LOGGER.warning("Device invoke timeout, Reinvoke")
-                    self.Invoke(self._invoke, self._fliter, self._show)
-                    continue
-            
             # if device is ready, check if device is lost
             if self._status & DeviceStatus.READY and time.time() - self._last_alive_time > self._keepalive:
                 id = self._client.get(CMD_AT_ID)
                 if id is None:
                     self._status = DeviceStatus.UNKNOWN
-                    _LOGGER.warning("Device lost, Reset")
+                    _LOGGER.debug("Device {} lost, Reset".format(self.info.id))
                     self.Reset()
                 else:
                     self._last_alive_time = time.time()
                     
+            
+            # if device is sampling, check if sample is satisfied
+            if self._status & DeviceStatus.SAMPLING:
+                if time.time() - self._last_event_time > self._timeout:
+                    _LOGGER.debug("Device {} sample timeout, Resample".format(self.info.id))
+                    self.Sample(self._sample)
+                
+            # if device is invoking, check if invoke is satisfied
+            if self._status & DeviceStatus.INVOKING:
+                if time.time() - self._last_event_time > self._timeout:
+                    _LOGGER.debug("Device {} invoke timeout, Reinvoke".format(self.info.id))
+                    self.Invoke(self._invoke, self._fliter, self._show)
+            
+     
 
     def is_alive(self):
         """Return True if the device is ready."""
@@ -112,8 +113,6 @@ class Device:
         def decorator(func):
             def wrapper(self, *args, **kwargs):
                 if not (self._status & status) == status:
-                    _LOGGER.info("Device status is not satisfied:{} & {}".format(
-                        self._status, status))
                     return None  # Or raise an exception or handle as needed
 
                 return func(self, *args, **kwargs)
@@ -160,6 +159,8 @@ class Device:
             return
 
         self.Break()
+        
+        self._info = None
 
         self._info = self._fetch_info()
         if self._info is None:
@@ -168,17 +169,19 @@ class Device:
             self._timer.start()
             return
         
+        self._last_alive_time = time.time()
         self._timer = None
         self._client.on_event = self._event_process
         self._client.on_log = self._log_process
-
         self._wifi = self._fetch_wifi()
         self._mqtt = self._fetch_mqtt()
         self._model = self._fetch_model()
+    
 
         self._status |= DeviceStatus.READY
 
         if self._on_connect is not None:
+            _LOGGER.info("Device connected:{}".format(self.info.id))
             self._on_connect(self)
 
         return self._status
@@ -244,12 +247,10 @@ class Device:
         return self._status & DeviceStatus.MQTT_CONNECTED
 
     @property
-    @check_status(DeviceStatus.READY)
     def info(self, *, skip_cache=False) -> DeviceInfo:
-
         if self._info is not None and not skip_cache:
             return self._info
-
+        
         self._info = self._fetch_info()
         return self._info
 
@@ -298,7 +299,7 @@ class Device:
 
     def Reset(self) -> None:
         """Reset the device."""
-        _LOGGER.warning("Device reset")
+        _LOGGER.info("Reset device {}".format(self.info.id))
         if self._on_disconnect is not None:
             self._on_disconnect(self)
         self._status = DeviceStatus.UNKNOWN
@@ -336,7 +337,7 @@ class Device:
                 self._status |= DeviceStatus.SAMPLING
                 self._status &= ~DeviceStatus.INVOKING
         else:
-            _LOGGER.error("sample error: {}".format(CMD_ERROR_STRINGS[response["code"]]))
+            _LOGGER.debug("Device {} sample error: {}".format(self.info.id, CMD_ERROR_STRINGS[response["code"]]))
             self.Reset()
         
         return response["data"]
@@ -362,8 +363,8 @@ class Device:
         
         self._last_event_time = time.time()
         
-        if self._model is None:
-            self._model = self._fetch_model()
+        # if invoke is changed, fetch model again
+        self._model = self._fetch_model()
             
         response = self._client.set(CMD_AT_INVOKE, '{},{},{}'.format(
             value, 1 if filter else 0, 0 if show else 1))
@@ -379,7 +380,7 @@ class Device:
                 self._status |= DeviceStatus.INVOKING
                 self._status &= ~DeviceStatus.SAMPLING
         else:
-            _LOGGER.error("invoke error: {}".format(CMD_ERROR_STRINGS[response["code"]]))
+            _LOGGER.debug("Device {} invoke error: {}".format(self.info.id, CMD_ERROR_STRINGS[response["code"]]))
             self.Reset()
                     
         return response["data"]
@@ -498,7 +499,7 @@ class Device:
                 self._status &= ~DeviceStatus.WIFI_CONNECTED
                 self._status |= DeviceStatus.WIFI_CONNECTTING
         else:
-            return None
+            return self._wifi if self._wifi else WiFiInfo(None)
 
         self._wifi_changed = False
         return WiFiInfo(wifi["data"])
@@ -518,19 +519,19 @@ class Device:
             return MQTTInfo(MQTTInfo.construct(server["data"], pubsub["data"]))
         else:
             self._mqtt_changed = False
-            return MQTTInfo(None)
+            return self._mqtt if self._mqtt else MQTTInfo(None)
 
     def _fetch_model(self) -> ModelInfo:
         """Fetch model info from the device."""
         response = self._client.get(CMD_AT_INFO)
 
         if response is None or response["data"]["info"] == "":
-            return ModelInfo(None)
+            return self._model if self._model else ModelInfo(None)
         try:
             model = json.loads(base64.b64decode(response["data"]["info"]))
         except Exception as ex:
-            _LOGGER.error("fetch model exception:{}".format(ex))
-            return ModelInfo(None)
+            _LOGGER.debug("Device {} model info error: {}".format(self.info.id, ex))
+            return self._model if self._model else ModelInfo(None)
 
         return ModelInfo(model)
 
@@ -655,8 +656,6 @@ class Device:
     def _event_process(self, event):
         """Process an event."""
         try:
-            
-            
             self._last_alive_time = time.time()
 
             if EVENT_INVOKE in event["name"]:
@@ -670,7 +669,7 @@ class Device:
                 if event["code"] == CMD_OK:
                     self._last_event_time = time.time()
                 else:
-                    _LOGGER.error("invoke error: {}".format(CMD_ERROR_STRINGS[event["code"]]))
+                    _LOGGER.debug("Device {} invoke error: {}".format(self.info.id, CMD_ERROR_STRINGS[event["code"]]))
                     self.Reset()
                     
 
@@ -685,7 +684,7 @@ class Device:
                 if event["code"] == CMD_OK:
                     self._last_event_time = time.time()
                 else:
-                    _LOGGER.error("sample error: {}".format(CMD_ERROR_STRINGS[event["code"]]))
+                    _LOGGER.debug("Device {} sample error: {}".format(self.info.id, CMD_ERROR_STRINGS[event["code"]]))
                     self.Reset()
   
 
@@ -723,8 +722,7 @@ class Device:
                 return
 
         except Exception as ex:
-            traceback.print_exc()
-            _LOGGER.error("event process exception:{}".format(ex))
+            _LOGGER.debug("Device {} event error: {}".format(self.info.id, ex))
 
         return
 

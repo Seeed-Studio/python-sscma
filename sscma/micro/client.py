@@ -196,6 +196,9 @@ class Client:
 
             if not wait_event or listener.response is not None:
                 break
+            
+        if listener.response is None and wait_event:
+            _LOGGER.debug("send_command:{} timeout".format(command))
 
         return listener.response
 
@@ -220,11 +223,7 @@ class Client:
         else:
             command = "{}{}={}".format(CMD_PREFIX, command, value)
 
-        response = self.send_command(command, wait_event, timeout)
-        if response is None:
-            return None
-        else:
-            return response
+        return self.send_command(command, wait_event, timeout)
 
     def get(self, command, tag=True, wait_event=True, timeout=None):
         """
@@ -245,11 +244,7 @@ class Client:
         else:
             command = "{}{}?".format(CMD_PREFIX, command)
 
-        response = self.send_command(command, wait_event, timeout)
-        if response is None:
-            return None
-        else:
-            return response
+        return  self.send_command(command, wait_event, timeout)
 
     def execute(self, command, tag=False, wait_event=False, timeout=None):
         """
@@ -269,11 +264,8 @@ class Client:
         else:
             command = "{}{}".format(CMD_PREFIX, command)
 
-        response = self.send_command(command, wait_event, timeout)
-        if response is None:
-            return None
-        else:
-            return response
+        return self.send_command(command, wait_event, timeout)
+
 
     def on_recieve(self, msg):
         """
@@ -329,8 +321,7 @@ class Client:
                                 self._on_log(paylod)
 
             except Exception as ex:
-                _LOGGER.error("payload decode exception:{}".format(ex))
-
+                _LOGGER.debug("payload decode exception:{}".format(ex))
             finally:
                 self._msg_buffer = self._msg_buffer[self._msg_buffer.find(
                     RESPONSE_SUFFIX)+2:]
@@ -404,12 +395,15 @@ class MQTTClient(Client):
 
         for key in kwargs:
             if key == "username":
-                self._client.username_pw_set(
-                    kwargs["username"], kwargs["password"])
+                if kwargs["username"] is not None:
+                    self._client.username_pw_set(
+                        kwargs["username"], kwargs["password"])
                 break
 
         self._client.connect(self._host, self._port, 120)
-        super().__init__(lambda msg: self._client.publish(self._tx_topic, msg))
+        super().__init__(lambda msg: self._client.publish(
+            self._tx_topic, msg, qos=0))
+        
 
     def __on_recieve(self, client, userdata, msg):
         self.on_recieve(msg.payload)
