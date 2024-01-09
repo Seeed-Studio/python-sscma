@@ -1,5 +1,5 @@
 
-FROM --platform=$BUILDPLATFORM alpine as builder
+FROM --platform=$BUILDPLATFORM ghcr.io/hassio-addons/base:15.0.3 as builder
 
 WORKDIR /tmp
 
@@ -9,7 +9,7 @@ RUN apk add --no-cache --update python3 py3-pip py3-wheel && \
     python3 setup.py bdist_wheel
 
 
-FROM --platform=$BUILDPLATFORM alpine
+FROM --platform=$BUILDPLATFORM ghcr.io/hassio-addons/base:15.0.3
 
 WORKDIR /tmp
 
