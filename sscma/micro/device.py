@@ -1,10 +1,11 @@
 import os
+import io
 import json
 import time
 import base64
 import logging
 from typing import Optional  # noqa: F401
-# from PIL import Image, ImageDraw, ImageFont, ImageFile
+from PIL import Image, ImageDraw, ImageFont, ImageFile
 
 from .const import *
 from .client import Client
@@ -77,29 +78,30 @@ class Device:
         while self._deamon:
             time.sleep(self._heartbeat)
             
-            # if device is sampling, check if sample is satisfied
-            if self._status & DeviceStatus.SAMPLING:
-                if time.time() - self._last_event_time > self._timeout:
-                    _LOGGER.warning("Device sample timeout, Resample")
-                    self.Sample(self._sample)
-                    continue
-                
-            if self._status & DeviceStatus.INVOKING:
-                if time.time() - self._last_event_time > self._timeout:
-                    _LOGGER.warning("Device invoke timeout, Reinvoke")
-                    self.Invoke(self._invoke, self._fliter, self._show)
-                    continue
-            
             # if device is ready, check if device is lost
             if self._status & DeviceStatus.READY and time.time() - self._last_alive_time > self._keepalive:
                 id = self._client.get(CMD_AT_ID)
                 if id is None:
                     self._status = DeviceStatus.UNKNOWN
-                    _LOGGER.warning("Device lost, Reset")
+                    _LOGGER.debug("Device {} lost, Reset".format(self.info.id))
                     self.Reset()
                 else:
                     self._last_alive_time = time.time()
                     
+            
+            # if device is sampling, check if sample is satisfied
+            if self._status & DeviceStatus.SAMPLING:
+                if time.time() - self._last_event_time > self._timeout:
+                    _LOGGER.debug("Device {} sample timeout, Resample".format(self.info.id))
+                    self.Sample(self._sample)
+                
+            # if device is invoking, check if invoke is satisfied
+            if self._status & DeviceStatus.INVOKING:
+                if time.time() - self._last_event_time > self._timeout:
+                    _LOGGER.debug("Device {} invoke timeout, Reinvoke".format(self.info.id))
+                    self.Invoke(self._invoke, self._fliter, self._show)
+            
+     
 
     def is_alive(self):
         """Return True if the device is ready."""
@@ -111,8 +113,6 @@ class Device:
         def decorator(func):
             def wrapper(self, *args, **kwargs):
                 if not (self._status & status) == status:
-                    _LOGGER.info("Device status is not satisfied:{} & {}".format(
-                        self._status, status))
                     return None  # Or raise an exception or handle as needed
 
                 return func(self, *args, **kwargs)
@@ -159,6 +159,8 @@ class Device:
             return
 
         self.Break()
+        
+        self._info = None
 
         self._info = self._fetch_info()
         if self._info is None:
@@ -167,17 +169,19 @@ class Device:
             self._timer.start()
             return
         
+        self._last_alive_time = time.time()
         self._timer = None
         self._client.on_event = self._event_process
         self._client.on_log = self._log_process
-
         self._wifi = self._fetch_wifi()
         self._mqtt = self._fetch_mqtt()
         self._model = self._fetch_model()
+    
 
         self._status |= DeviceStatus.READY
 
         if self._on_connect is not None:
+            _LOGGER.info("Device connected:{}".format(self.info.id))
             self._on_connect(self)
 
         return self._status
@@ -243,12 +247,10 @@ class Device:
         return self._status & DeviceStatus.MQTT_CONNECTED
 
     @property
-    @check_status(DeviceStatus.READY)
     def info(self, *, skip_cache=False) -> DeviceInfo:
-
         if self._info is not None and not skip_cache:
             return self._info
-
+        
         self._info = self._fetch_info()
         return self._info
 
@@ -297,7 +299,7 @@ class Device:
 
     def Reset(self) -> None:
         """Reset the device."""
-        _LOGGER.warning("Device reset")
+        _LOGGER.info("Reset device {}".format(self.info.id))
         if self._on_disconnect is not None:
             self._on_disconnect(self)
         self._status = DeviceStatus.UNKNOWN
@@ -335,7 +337,7 @@ class Device:
                 self._status |= DeviceStatus.SAMPLING
                 self._status &= ~DeviceStatus.INVOKING
         else:
-            _LOGGER.error("sample error: {}".format(CMD_ERROR_STRINGS[response["code"]]))
+            _LOGGER.debug("Device {} sample error: {}".format(self.info.id, CMD_ERROR_STRINGS[response["code"]]))
             self.Reset()
         
         return response["data"]
@@ -361,8 +363,8 @@ class Device:
         
         self._last_event_time = time.time()
         
-        if self._model is None:
-            self._model = self._fetch_model()
+        # if invoke is changed, fetch model again
+        self._model = self._fetch_model()
             
         response = self._client.set(CMD_AT_INVOKE, '{},{},{}'.format(
             value, 1 if filter else 0, 0 if show else 1))
@@ -378,7 +380,7 @@ class Device:
                 self._status |= DeviceStatus.INVOKING
                 self._status &= ~DeviceStatus.SAMPLING
         else:
-            _LOGGER.error("invoke error: {}".format(CMD_ERROR_STRINGS[response["code"]]))
+            _LOGGER.debug("Device {} invoke error: {}".format(self.info.id, CMD_ERROR_STRINGS[response["code"]]))
             self.Reset()
                     
         return response["data"]
@@ -497,7 +499,7 @@ class Device:
                 self._status &= ~DeviceStatus.WIFI_CONNECTED
                 self._status |= DeviceStatus.WIFI_CONNECTTING
         else:
-            return None
+            return self._wifi if self._wifi else WiFiInfo(None)
 
         self._wifi_changed = False
         return WiFiInfo(wifi["data"])
@@ -517,145 +519,143 @@ class Device:
             return MQTTInfo(MQTTInfo.construct(server["data"], pubsub["data"]))
         else:
             self._mqtt_changed = False
-            return MQTTInfo(None)
+            return self._mqtt if self._mqtt else MQTTInfo(None)
 
     def _fetch_model(self) -> ModelInfo:
         """Fetch model info from the device."""
         response = self._client.get(CMD_AT_INFO)
 
         if response is None or response["data"]["info"] == "":
-            return ModelInfo(None)
+            return self._model if self._model else ModelInfo(None)
         try:
             model = json.loads(base64.b64decode(response["data"]["info"]))
         except Exception as ex:
-            _LOGGER.error("fetch model exception:{}".format(ex))
-            return ModelInfo(None)
+            _LOGGER.debug("Device {} model info error: {}".format(self.info.id, ex))
+            return self._model if self._model else ModelInfo(None)
 
         return ModelInfo(model)
 
-    # def _draw_classes(self, image, classes):
-    #     """
-    #     Draws classes on an image.
+    def _draw_classes(self, image, classes):
+        """
+        Draws classes on an image.
 
-    #     Args:
-    #     image: The image to draw the classes on.
-    #     classes: The classes to draw.
-    #     """
+        Args:
+        image: The image to draw the classes on.
+        classes: The classes to draw.
+        """
 
-    #     if image.mode != "RGBA":
-    #         image = image.convert("RGBA")
+        if image.mode != "RGBA":
+            image = image.convert("RGBA")
 
-    #     transp = Image.new('RGBA', image.size, (0, 0, 0, 0))
-    #     draw = ImageDraw.Draw(transp, "RGBA")
+        transp = Image.new('RGBA', image.size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(transp, "RGBA")
 
-    #     img_w, img_h = image.size
+        img_w, img_h = image.size
 
-    #     num_classes = len(classes)
-    #     rect_bottom = int(img_h / 10)
-    #     font_size = int(img_w / 16)
+        num_classes = len(classes)
+        rect_bottom = int(img_h / 10)
+        font_size = int(img_w / 16)
 
-    #     for i, (score, target) in enumerate(classes):
+        for i, (score, target) in enumerate(classes):
 
-    #         if self.model:
-    #             target_str = self.model.classes[target] if target < len(
-    #                 self.model.classes) else str(target)
-    #         else:
-    #             target_str = str(target)
+            if self.model:
+                target_str = self.model.classes[target] if target < len(
+                    self.model.classes) else str(target)
+            else:
+                target_str = str(target)
                 
-    #         alpha = 0.3
-    #         fill_color = COLORS[target % len(COLORS)]
-    #         rect_left = (img_w / num_classes) * i
-    #         rect_right = (img_w / num_classes) * (i + 1)
-    #         draw.rectangle([rect_left, 0, rect_right, rect_bottom],
-    #                        fill=(*fill_color, int(255 * alpha)))
+            alpha = 0.3
+            fill_color = COLORS[target % len(COLORS)]
+            rect_left = (img_w / num_classes) * i
+            rect_right = (img_w / num_classes) * (i + 1)
+            draw.rectangle([rect_left, 0, rect_right, rect_bottom],
+                           fill=(*fill_color, int(255 * alpha)))
 
-    #         font = ImageFont.truetype(self._font_path, size=font_size)
-    #         text_left = (img_w / num_classes) * i + 5
-    #         text_top = rect_bottom - \
-    #             font_size - 5 if rect_bottom >= font_size else rect_bottom + font_size
-    #         draw.text((text_left, text_top),
-    #                   f"{target_str}: {score}", fill="#ffffff", font=font)
-    #         image.paste(Image.alpha_composite(image, transp))
-    #     image = image.convert("RGB")
-    #     return image
+            font = ImageFont.truetype(self._font_path, size=font_size)
+            text_left = (img_w / num_classes) * i + 5
+            text_top = rect_bottom - \
+                font_size - 5 if rect_bottom >= font_size else rect_bottom + font_size
+            draw.text((text_left, text_top),
+                      f"{target_str}: {score}", fill="#ffffff", font=font)
+            image.paste(Image.alpha_composite(image, transp))
+        image = image.convert("RGB")
+        return image
 
-    # def _draw_boxes(self, image, boxes):
-    #     """
-    #     Draws boxes on an image.
+    def _draw_boxes(self, image, boxes):
+        """
+        Draws boxes on an image.
 
-    #     Args:
-    #     image: The image to draw the boxes on.
-    #     boxes: The boxes to draw.
-    #     """
+        Args:
+        image: The image to draw the boxes on.
+        boxes: The boxes to draw.
+        """
 
-    #     if image.mode != "RGBA":
-    #         image = image.convert("RGBA")
+        if image.mode != "RGBA":
+            image = image.convert("RGBA")
 
-    #     transp = Image.new('RGBA', image.size, (0, 0, 0, 0))
-    #     draw = ImageDraw.Draw(transp, "RGBA")
+        transp = Image.new('RGBA', image.size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(transp, "RGBA")
 
-    #     img_w, img_h = image.size
+        img_w, img_h = image.size
 
-    #     for box in boxes:
-    #         x, y, w, h, score, target = box
+        for box in boxes:
+            x, y, w, h, score, target = box
 
-    #         if self.model:
-    #             target_str = self.model.classes[target] if target < len(
-    #                 self.model.classes) else str(target)
-    #         else:
-    #             target_str = str(target)
+            if self.model:
+                target_str = self.model.classes[target] if target < len(
+                    self.model.classes) else str(target)
+            else:
+                target_str = str(target)
                 
-    #         alpha = 0.5
-    #         fill_color = COLORS[target % len(COLORS)]
-    #         rect_left = x - w / 2
-    #         rect_right = x + w / 2
-    #         rect_top = y - h / 2
-    #         rect_bottom = y + h / 2
-    #         rect_left = rect_left > 0 and rect_left or 0
-    #         rect_right = rect_right < img_w and rect_right or img_w
-    #         rect_top = rect_top > 0 and rect_top or 0
-    #         rect_bottom = rect_bottom < img_h and rect_bottom or img_h
-    #         draw.rectangle([rect_left, rect_top, rect_right,
-    #                        rect_bottom], outline=(*fill_color, int(255 * alpha)),  width=2)
-    #         font_size = int(min(img_w, img_h) / 16)
-    #         font = ImageFont.truetype(self._font_path, int(font_size))
-    #         text_color = "#ffffff"
-    #         text_left = rect_left
-    #         text_top = rect_top - font_size
-    #         text_top = text_top > 0 and text_top or 0
-    #         draw.rectangle([text_left, text_top, rect_right,
-    #                        text_top + font_size], fill=(*fill_color, int(255 * alpha)))
-    #         draw.text((text_left+2, text_top),
-    #                   f"{target_str}: {score}", fill=text_color, font=font)
-    #         image.paste(Image.alpha_composite(image, transp))
+            alpha = 0.5
+            fill_color = COLORS[target % len(COLORS)]
+            rect_left = x - w / 2
+            rect_right = x + w / 2
+            rect_top = y - h / 2
+            rect_bottom = y + h / 2
+            rect_left = rect_left > 0 and rect_left or 0
+            rect_right = rect_right < img_w and rect_right or img_w
+            rect_top = rect_top > 0 and rect_top or 0
+            rect_bottom = rect_bottom < img_h and rect_bottom or img_h
+            draw.rectangle([rect_left, rect_top, rect_right,
+                           rect_bottom], outline=(*fill_color, int(255 * alpha)),  width=2)
+            font_size = int(min(img_w, img_h) / 16)
+            font = ImageFont.truetype(self._font_path, int(font_size))
+            text_color = "#ffffff"
+            text_left = rect_left
+            text_top = rect_top - font_size
+            text_top = text_top > 0 and text_top or 0
+            draw.rectangle([text_left, text_top, rect_right,
+                           text_top + font_size], fill=(*fill_color, int(255 * alpha)))
+            draw.text((text_left+2, text_top),
+                      f"{target_str}: {score}", fill=text_color, font=font)
+            image.paste(Image.alpha_composite(image, transp))
 
-    #     image = image.convert("RGB")
+        image = image.convert("RGB")
 
-    #     return image
+        return image
 
-    # def _draw_keypoints(self, image, keypoints):
-    #     """
-    #     Draws keypoints on an image.
+    def _draw_keypoints(self, image, keypoints):
+        """
+        Draws keypoints on an image.
 
-    #     Args:
-    #     image: The image to draw the keypoints on.
-    #     keypoints: The keypoints to draw.
-    #     """
-    #     draw = ImageDraw.Draw(image)
+        Args:
+        image: The image to draw the keypoints on.
+        keypoints: The keypoints to draw.
+        """
+        draw = ImageDraw.Draw(image)
 
-    #     for point in keypoints:
-    #         x, y, _, t = point
-    #         # Use x value for color differentiation
-    #         fill_color = COLORS[t % len(COLORS)]
-    #         draw.point([x, y], fill=fill_color)
+        for point in keypoints:
+            x, y, _, t = point
+            # Use x value for color differentiation
+            fill_color = COLORS[t % len(COLORS)]
+            draw.point([x, y], fill=fill_color)
 
-    #     return image
+        return image
 
     def _event_process(self, event):
         """Process an event."""
         try:
-            
-            
             self._last_alive_time = time.time()
 
             if EVENT_INVOKE in event["name"]:
@@ -669,7 +669,7 @@ class Device:
                 if event["code"] == CMD_OK:
                     self._last_event_time = time.time()
                 else:
-                    _LOGGER.error("invoke error: {}".format(CMD_ERROR_STRINGS[event["code"]]))
+                    _LOGGER.debug("Device {} invoke error: {}".format(self.info.id, CMD_ERROR_STRINGS[event["code"]]))
                     self.Reset()
                     
 
@@ -684,7 +684,7 @@ class Device:
                 if event["code"] == CMD_OK:
                     self._last_event_time = time.time()
                 else:
-                    _LOGGER.error("sample error: {}".format(CMD_ERROR_STRINGS[event["code"]]))
+                    _LOGGER.debug("Device {} sample error: {}".format(self.info.id, CMD_ERROR_STRINGS[event["code"]]))
                     self.Reset()
   
 
@@ -695,7 +695,7 @@ class Device:
                 # draw image
                 # if "image" in event["data"] and event["data"]["image"]:
 
-                #     ImageFilbase64_imagee.LOAD_TRUNCATED_IMAGES = True
+                #     ImageFile.LOAD_TRUNCATED_IMAGES = True
                 #     image = Image.open(io.BytesIO(
                 #         base64.b64decode(event["data"]["image"])))
 
@@ -722,8 +722,7 @@ class Device:
                 return
 
         except Exception as ex:
-            traceback.print_exc()
-            _LOGGER.error("event process exception:{}".format(ex))
+            _LOGGER.debug("Device {} event error: {}".format(self.info.id, ex))
 
         return
 

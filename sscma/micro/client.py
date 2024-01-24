@@ -198,7 +198,7 @@ class Client:
                 break
             
         if listener.response is None and wait_event:
-            _LOGGER.error("send_command:{} timeout".format(command))
+            _LOGGER.debug("send_command:{} timeout".format(command))
 
         return listener.response
 
@@ -321,7 +321,7 @@ class Client:
                                 self._on_log(paylod)
 
             except Exception as ex:
-                _LOGGER.warning("payload decode exception:{}".format(ex))
+                _LOGGER.debug("payload decode exception:{}".format(ex))
             finally:
                 self._msg_buffer = self._msg_buffer[self._msg_buffer.find(
                     RESPONSE_SUFFIX)+2:]
