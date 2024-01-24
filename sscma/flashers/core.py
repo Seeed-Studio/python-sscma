@@ -21,18 +21,18 @@ class HimaxFlasher(BaseFlasher):
         self.serial.port = self.port
         self.serial.baudrate = self.baudrate
         self.serial.timeout = self.timeout
-        self.xmodem = XMODEM(self.getc, self.putc)
+        self.xmodem = XMODEM(self.getc, self.putc, mode='xmodem')
         self.log = logging.getLogger('sscma.flasher')
         
         logging.getLogger('xmodem.XMODEM').setLevel(logging.CRITICAL + 1)
 
-        
-        
+    
         super().__init__()
 
         
     def getc(self, size, timeout=1):
-        return self.serial.read(size) or None
+        data = self.serial.read(size) or None
+        return data
     
     def putc(self, data, timeout=1):
         return self.serial.write(data) or None
@@ -133,15 +133,20 @@ class HimaxFlasher(BaseFlasher):
         def callback_written(total_packets, success_count, error_count):
             progress_bar.update(total_packets * 128 - progress_bar.n)
         
-        self.serial.timeout = 2
-        status = self.xmodem.send(data, quiet=True, callback=callback_written)
+        self.serial.timeout = 60
+        status = self.xmodem.send(data, retry=12, timeout=60, quiet=False, callback=callback_written)
         
         if status:
             self.wait_for_flash_done()
-            
-        progress_bar.close()
+
         
         self.serial.close()
+        time.sleep(0.5)
+        self.serial.open()
+        time.sleep(0.5)
+        self.serial.close()
+        
+        progress_bar.close()
  
         
             
