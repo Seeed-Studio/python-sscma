@@ -4,7 +4,12 @@ from socketserver import ThreadingMixIn
 from http import server as http_server
 from concurrent.futures import ThreadPoolExecutor
 
+from signal import signal, SIGPIPE, SIG_DFL
+
 from .handler import HTTPHandler
+
+
+signal(SIGPIPE, SIG_DFL)
 
 
 class PooledHTTPServer(ThreadingMixIn, http_server.HTTPServer):
@@ -45,4 +50,5 @@ class HTTPServer:
                 certfile=self.ssl_certfile, keyfile=self.ssl_keyfile
             )
             server.socket = context.wrap_socket(server.socket, server_side=True)
+        server.allow_reuse_address = True
         server.serve_forever()

@@ -94,8 +94,15 @@ class Pipeline:
         return annotation
 
     def __overlay(self, background: np.ndarray, foreground: np.ndarray) -> np.ndarray:
-        mask = foreground[:, :, 3] > 0
-        background[mask] = foreground[mask]
+        w, h = (
+            min(foreground.shape[0], background.shape[0]),
+            min(foreground.shape[1], background.shape[1]),
+        )
+        mask = foreground[:w, :h, 3] > 0
+        background[:w, :h, :][mask] = foreground[
+            :w,
+            :h,
+        ][mask]
         return background
 
     def __annotate(

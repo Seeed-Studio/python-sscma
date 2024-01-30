@@ -10,13 +10,11 @@ from http import HTTPStatus
 
 from supervision import Detections
 
-from .session_manager import SessionManager
-from .utils import (
-    parse_bytes_to_json,
-    SessionConfig
-)
-
 from sscma.utils.image import image_from_base64
+
+from .session_manager import SessionManager
+from .utils import parse_bytes_to_json, SessionConfig
+
 
 shared_session_manager = SessionManager()
 
@@ -27,8 +25,10 @@ class HTTPHandler(http.server.SimpleHTTPRequestHandler):
         request: bytes,
         client_address: Tuple[str, int],
         server: socketserver.BaseServer,
+        request_timeout: int = 10,
     ):
         super().__init__(request, client_address, server)
+        self.request.settimeout(request_timeout)
 
     def verify_content_type(self):
         if not self.headers["Content-Type"] == "application/json":
@@ -71,7 +71,6 @@ class HTTPHandler(http.server.SimpleHTTPRequestHandler):
         response["active_threads"] = threading.active_count()
 
         self.wfile.write(bytes(json.dumps(response).encode()))
-        self.wfile.flush()
 
     def do_POST(self):
         if not (self.verify_content_type() and self.verify_content_length()):
@@ -101,7 +100,9 @@ class HTTPHandler(http.server.SimpleHTTPRequestHandler):
                         image = image_from_base64(request["image"])
                     except Exception as exc:  # pylint: disable=broad-except
                         logging.warning("Failed to parse image", exc_info=exc)
-                annotations = request["annotations"] if "annotations" in request else None
+                annotations = (
+                    request["annotations"] if "annotations" in request else None
+                )
                 response = session.push(detections, image, annotations)
 
                 self.send_response(HTTPStatus.OK)
@@ -109,7 +110,6 @@ class HTTPHandler(http.server.SimpleHTTPRequestHandler):
                 self.end_headers()
 
                 self.wfile.write(bytes(json.dumps(response).encode()))
-                self.wfile.flush()
 
         except Exception as exc:  # pylint: disable=broad-except
             logging.warning("Failed to parse request", exc_info=exc)
