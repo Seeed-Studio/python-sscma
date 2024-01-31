@@ -79,8 +79,14 @@ class HTTPHandler(http.server.SimpleHTTPRequestHandler):
         if not (self.verify_content_type() and self.verify_content_length()):
             return
 
-        content_length = int(self.headers["Content-Length"])
-        request = self.rfile.read(content_length)
+        try:
+            content_length = int(self.headers["Content-Length"])
+            request = self.rfile.read(content_length)
+        except OSError as exc:
+            logger.warning("Failed to read request", exc_info=exc)
+            self.send_response(HTTPStatus.BAD_REQUEST)
+            self.end_headers()
+            return
 
         try:
             request = parse_bytes_to_json(request)
