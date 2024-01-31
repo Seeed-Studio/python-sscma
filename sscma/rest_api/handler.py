@@ -2,7 +2,6 @@ from typing import Tuple
 
 import json
 import threading
-import logging
 
 import socketserver
 import http
@@ -10,13 +9,12 @@ from http import HTTPStatus
 
 from supervision import Detections
 
-from .session_manager import SessionManager
-from .utils import (
-    parse_bytes_to_json,
-    SessionConfig
-)
-
 from sscma.utils.image import image_from_base64
+
+from .session_manager import SessionManager
+from .utils import parse_bytes_to_json, SessionConfig
+from .logger import logger
+
 
 shared_session_manager = SessionManager()
 
@@ -27,8 +25,10 @@ class HTTPHandler(http.server.SimpleHTTPRequestHandler):
         request: bytes,
         client_address: Tuple[str, int],
         server: socketserver.BaseServer,
+        request_timeout: int = 10,
     ):
         super().__init__(request, client_address, server)
+        self.request.settimeout(request_timeout)
 
     def verify_content_type(self):
         if not self.headers["Content-Type"] == "application/json":
@@ -70,15 +70,23 @@ class HTTPHandler(http.server.SimpleHTTPRequestHandler):
         response["max_sessions"] = shared_session_manager.get_sessions_limit()
         response["active_threads"] = threading.active_count()
 
-        self.wfile.write(bytes(json.dumps(response).encode()))
-        self.wfile.flush()
+        try:
+            self.wfile.write(bytes(json.dumps(response).encode()))
+        except BrokenPipeError:
+            pass
 
     def do_POST(self):
         if not (self.verify_content_type() and self.verify_content_length()):
             return
 
-        content_length = int(self.headers["Content-Length"])
-        request = self.rfile.read(content_length)
+        try:
+            content_length = int(self.headers["Content-Length"])
+            request = self.rfile.read(content_length)
+        except OSError as exc:
+            logger.warning("Failed to read request", exc_info=exc)
+            self.send_response(HTTPStatus.BAD_REQUEST)
+            self.end_headers()
+            return
 
         try:
             request = parse_bytes_to_json(request)
@@ -100,19 +108,23 @@ class HTTPHandler(http.server.SimpleHTTPRequestHandler):
                     try:
                         image = image_from_base64(request["image"])
                     except Exception as exc:  # pylint: disable=broad-except
-                        logging.warning("Failed to parse image", exc_info=exc)
-                annotations = request["annotations"] if "annotations" in request else None
+                        logger.warning("Failed to parse image", exc_info=exc)
+                annotations = (
+                    request["annotations"] if "annotations" in request else None
+                )
                 response = session.push(detections, image, annotations)
 
                 self.send_response(HTTPStatus.OK)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
 
-                self.wfile.write(bytes(json.dumps(response).encode()))
-                self.wfile.flush()
+                try:
+                    self.wfile.write(bytes(json.dumps(response).encode()))
+                except BrokenPipeError:
+                    pass
 
         except Exception as exc:  # pylint: disable=broad-except
-            logging.warning("Failed to parse request", exc_info=exc)
+            logger.warning("Failed to parse request", exc_info=exc)
             self.send_response(HTTPStatus.BAD_REQUEST)
             self.end_headers()
 
@@ -128,7 +140,7 @@ class HTTPHandler(http.server.SimpleHTTPRequestHandler):
                 raise ValueError(f"Session {session_id} not exist")
 
         except Exception as exc:  # pylint: disable=broad-except
-            logging.warning("Failed to remove session", exc_info=exc)
+            logger.warning("Failed to remove session", exc_info=exc)
             self.send_response(HTTPStatus.BAD_REQUEST)
             self.end_headers()
             return

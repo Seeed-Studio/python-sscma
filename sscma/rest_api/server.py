@@ -45,4 +45,5 @@ class HTTPServer:
                 certfile=self.ssl_certfile, keyfile=self.ssl_keyfile
             )
             server.socket = context.wrap_socket(server.socket, server_side=True)
+        server.allow_reuse_address = True
         server.serve_forever()

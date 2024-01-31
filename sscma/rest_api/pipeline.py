@@ -1,6 +1,5 @@
 from typing import List, Dict
 
-import logging
 from threading import Lock
 
 import numpy as np
@@ -19,6 +18,7 @@ from supervision import (
 
 from sscma.utils.image import image_to_base64
 
+from .logger import logger
 from .utils import (
     SessionConfig,
     detection_to_tracked_bboxs,
@@ -94,8 +94,15 @@ class Pipeline:
         return annotation
 
     def __overlay(self, background: np.ndarray, foreground: np.ndarray) -> np.ndarray:
-        mask = foreground[:, :, 3] > 0
-        background[mask] = foreground[mask]
+        w, h = (
+            min(foreground.shape[0], background.shape[0]),
+            min(foreground.shape[1], background.shape[1]),
+        )
+        mask = foreground[:w, :h, 3] > 0
+        background[:w, :h, :][mask] = foreground[
+            :w,
+            :h,
+        ][mask]
         return background
 
     def __annotate(
@@ -205,5 +212,5 @@ class Pipeline:
 
                 result["tracked_boxes"] = detection_to_tracked_bboxs(detections)
             except Exception as exc:  # pylint: disable=broad-except
-                logging.warning("Failed to track detections", exc_info=exc)
+                logger.warning("Failed to track detections", exc_info=exc)
         return result

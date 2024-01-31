@@ -1,13 +1,11 @@
 from typing import Tuple, Union, Dict
 
 import json
-import base64
 
 from dataclasses import dataclass
 from functools import cache
 
 import numpy as np
-import cv2
 
 from matplotlib import colormaps, colors
 from supervision import Detections, Position
@@ -46,7 +44,7 @@ class BoundingBoxConfig:
 @dataclass
 class TracingConfig:
     position: Position = Position.CENTER
-    trace_length: int = 30,
+    trace_length: int = 30
     trace_thickness: int = 2
 
     def __post_init__(self):
