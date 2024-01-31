@@ -4,12 +4,7 @@ from socketserver import ThreadingMixIn
 from http import server as http_server
 from concurrent.futures import ThreadPoolExecutor
 
-from signal import signal, SIGPIPE, SIG_DFL
-
 from .handler import HTTPHandler
-
-
-signal(SIGPIPE, SIG_DFL)
 
 
 class PooledHTTPServer(ThreadingMixIn, http_server.HTTPServer):

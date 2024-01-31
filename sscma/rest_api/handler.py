@@ -70,10 +70,13 @@ class HTTPHandler(http.server.SimpleHTTPRequestHandler):
         response["max_sessions"] = shared_session_manager.get_sessions_limit()
         response["active_threads"] = threading.active_count()
 
-        self.wfile.write(bytes(json.dumps(response).encode()))
+        try:
+            self.wfile.write(bytes(json.dumps(response).encode()))
+        except BrokenPipeError:
+            pass
 
     def do_POST(self):
-        if not (self.verify_content_type() and self.verify_content_length()):
+        if not (self.verify_content_type() or not self.verify_content_length()):
             return
 
         content_length = int(self.headers["Content-Length"])
@@ -109,7 +112,10 @@ class HTTPHandler(http.server.SimpleHTTPRequestHandler):
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
 
-                self.wfile.write(bytes(json.dumps(response).encode()))
+                try:
+                    self.wfile.write(bytes(json.dumps(response).encode()))
+                except BrokenPipeError:
+                    pass
 
         except Exception as exc:  # pylint: disable=broad-except
             logging.warning("Failed to parse request", exc_info=exc)
