@@ -2,7 +2,6 @@ from typing import Tuple
 
 import json
 import threading
-import logging
 
 import socketserver
 import http
@@ -14,6 +13,7 @@ from sscma.utils.image import image_from_base64
 
 from .session_manager import SessionManager
 from .utils import parse_bytes_to_json, SessionConfig
+from .logger import logger
 
 
 shared_session_manager = SessionManager()
@@ -102,7 +102,7 @@ class HTTPHandler(http.server.SimpleHTTPRequestHandler):
                     try:
                         image = image_from_base64(request["image"])
                     except Exception as exc:  # pylint: disable=broad-except
-                        logging.warning("Failed to parse image", exc_info=exc)
+                        logger.warning("Failed to parse image", exc_info=exc)
                 annotations = (
                     request["annotations"] if "annotations" in request else None
                 )
@@ -118,7 +118,7 @@ class HTTPHandler(http.server.SimpleHTTPRequestHandler):
                     pass
 
         except Exception as exc:  # pylint: disable=broad-except
-            logging.warning("Failed to parse request", exc_info=exc)
+            logger.warning("Failed to parse request", exc_info=exc)
             self.send_response(HTTPStatus.BAD_REQUEST)
             self.end_headers()
 
@@ -134,7 +134,7 @@ class HTTPHandler(http.server.SimpleHTTPRequestHandler):
                 raise ValueError(f"Session {session_id} not exist")
 
         except Exception as exc:  # pylint: disable=broad-except
-            logging.warning("Failed to remove session", exc_info=exc)
+            logger.warning("Failed to remove session", exc_info=exc)
             self.send_response(HTTPStatus.BAD_REQUEST)
             self.end_headers()
             return
