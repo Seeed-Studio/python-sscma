@@ -76,7 +76,7 @@ class HTTPHandler(http.server.SimpleHTTPRequestHandler):
             pass
 
     def do_POST(self):
-        if not (self.verify_content_type() or not self.verify_content_length()):
+        if not (self.verify_content_type() and self.verify_content_length()):
             return
 
         content_length = int(self.headers["Content-Length"])
