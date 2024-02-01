@@ -73,7 +73,7 @@ class HTTPHandler(http.server.SimpleHTTPRequestHandler):
         try:
             self.wfile.write(bytes(json.dumps(response).encode()))
         except BrokenPipeError:
-            pass
+            logger.warning("Failed to write response")
 
     def do_POST(self):
         if not (self.verify_content_type() and self.verify_content_length()):
@@ -82,15 +82,14 @@ class HTTPHandler(http.server.SimpleHTTPRequestHandler):
         try:
             content_length = int(self.headers["Content-Length"])
             request = self.rfile.read(content_length)
+            request = parse_bytes_to_json(request)
         except OSError as exc:
-            logger.warning("Failed to read request", exc_info=exc)
+            logger.warning("Failed to parse request", exc_info=exc)
             self.send_response(HTTPStatus.BAD_REQUEST)
             self.end_headers()
             return
 
         try:
-            request = parse_bytes_to_json(request)
-
             if self.path == "/":
                 session_id = self.session_id
                 session_config = SessionConfig(**request)
@@ -105,10 +104,8 @@ class HTTPHandler(http.server.SimpleHTTPRequestHandler):
                 detections = Detections.from_sscma_micro(request)
                 image = None
                 if "image" in request:
-                    try:
-                        image = image_from_base64(request["image"])
-                    except Exception as exc:  # pylint: disable=broad-except
-                        logger.warning("Failed to parse image", exc_info=exc)
+                    image = image_from_base64(request["image"])
+
                 annotations = (
                     request["annotations"] if "annotations" in request else None
                 )
@@ -121,10 +118,10 @@ class HTTPHandler(http.server.SimpleHTTPRequestHandler):
                 try:
                     self.wfile.write(bytes(json.dumps(response).encode()))
                 except BrokenPipeError:
-                    pass
+                    logger.warning("Failed to write response")
 
         except Exception as exc:  # pylint: disable=broad-except
-            logger.warning("Failed to parse request", exc_info=exc)
+            logger.warning("Failed to process request", exc_info=exc)
             self.send_response(HTTPStatus.BAD_REQUEST)
             self.end_headers()
 

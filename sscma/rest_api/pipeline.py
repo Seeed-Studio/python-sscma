@@ -1,9 +1,8 @@
-from typing import List, Dict
+from typing import List
 
 from threading import Lock
 
 import numpy as np
-import cv2
 
 from supervision import (
     ByteTrack,
@@ -18,7 +17,6 @@ from supervision import (
 
 from sscma.utils.image import image_to_base64
 
-from .logger import logger
 from .utils import (
     SessionConfig,
     detection_to_tracked_bboxs,
@@ -40,8 +38,7 @@ class Pipeline:
 
         annotation_config = config.annotation_config
         self.canva_resolution = annotation_config.resolution[:2]
-        self.canva_background = np.zeros((*self.canva_resolution, 4), dtype=np.uint8)
-        self.canvas = {}
+        self.canva_background = np.zeros((*self.canva_resolution, 3), dtype=np.uint8)
         polygon_canva = self.canva_background.copy()
         polygon_color_platte = ColorPalette.from_hex(color_from_cmap("Pastel2"))
         self.filter_regions = {}
@@ -60,7 +57,7 @@ class Pipeline:
                 text_padding=annotation_config.polygon.text_padding,
             ).annotate(scene=polygon_canva, label=region_name)
             self.filter_regions[region_name] = zone
-        self.canvas["polygon"] = self.__masked_annotation(polygon_canva)
+        self.canva_polygon = [polygon_canva, self.__mask_from_annotation(polygon_canva)]
 
         color_platte = ColorPalette.from_hex(color_from_cmap("Accent"))
         self.box_annotator = BoundingBoxAnnotator(
@@ -83,65 +80,55 @@ class Pipeline:
         self.label_map = annotation_config.labeling.label_map
         self.heatmap_annontator = HeatMapAnnotator(
             position=annotation_config.heatmap.position,
-            opacity=annotation_config.heatmap.opacity,
+            opacity=1.0,
             radius=annotation_config.heatmap.radius,
             kernel_size=annotation_config.heatmap.kernel_size,
         )
+        self.canva_heatmap_weight = annotation_config.heatmap.opacity
 
-    def __masked_annotation(self, annotation: np.ndarray) -> np.ndarray:
-        alpha = np.iinfo(annotation.dtype).max
-        annotation[np.any(annotation[:, :, :3] != 0, axis=-1), 3] = alpha
-        return annotation
+    @staticmethod
+    def __mask_from_annotation(annotation: np.ndarray) -> np.ndarray:
+        mask = annotation > 0
+        mask = np.any(mask, axis=-1)
+        return mask
 
-    def __overlay(self, background: np.ndarray, foreground: np.ndarray) -> np.ndarray:
-        w, h = (
-            min(foreground.shape[0], background.shape[0]),
-            min(foreground.shape[1], background.shape[1]),
-        )
-        mask = foreground[:w, :h, 3] > 0
-        background[:w, :h, :][mask] = foreground[
-            :w,
-            :h,
-        ][mask]
+    @staticmethod
+    def __overlay(
+        background: np.ndarray, foreground: np.ndarray, mask: np.ndarray
+    ) -> np.ndarray:
+        background[mask] = foreground[mask]
         return background
 
-    def __annotate(
-        self,
-        canvas: Dict[str, np.ndarray],
-        name: str,
-        detections: dict,
-        blending: np.ndarray = None,
+    @staticmethod
+    def __weighted_overlay(
+        background: np.ndarray, foreground: np.ndarray, mask: np.ndarray, weight: float
     ) -> np.ndarray:
+        background[mask] = background[mask] * (1.0 - weight) + foreground[mask] * weight
+        return background
+
+    def __annotate(self, canvas: dict, name: str, detections: dict):
         if name == "polygon":
-            annotated = self.canvas["polygon"]
             if "polygon" not in canvas:
-                canvas["polygon"] = annotated
-            blending = self.__overlay(blending, annotated)
-            return blending
+                canvas["polygon"] = self.canva_polygon.copy()
+            return canvas
 
         if name == "bounding_box":
             if "bounding_box" not in canvas:
                 annotated = self.box_annotator.annotate(
                     scene=self.canva_background.copy(), detections=detections
                 )
-                annotated = self.__masked_annotation(annotated)
-                canvas["bounding_box"] = annotated
-            else:
-                annotated = canvas["bounding_box"]
-            blending = self.__overlay(blending, annotated)
-            return blending
+                mask = self.__mask_from_annotation(annotated)
+                canvas["bounding_box"] = [annotated, mask]
+            return canvas
 
         if name == "tracing":
             if "tracing" not in canvas:
                 annotated = self.trace_annotator.annotate(
                     scene=self.canva_background.copy(), detections=detections
                 )
-                annotated = self.__masked_annotation(annotated)
-                canvas["tracing"] = annotated
-            else:
-                annotated = canvas["tracing"]
-            blending = self.__overlay(blending, annotated)
-            return blending
+                mask = self.__mask_from_annotation(annotated)
+                canvas["tracing"] = [annotated, mask]
+            return canvas
 
         if name == "labeling":
             if "labeling" not in canvas:
@@ -155,21 +142,18 @@ class Pipeline:
                         )
                     ],
                 )
-                annotated = self.__masked_annotation(annotated)
-                canvas["labeling"] = annotated
-            else:
-                annotated = canvas["labeling"]
-            blending = self.__overlay(blending, annotated)
-            return blending
+                mask = self.__mask_from_annotation(annotated)
+                canvas["labeling"] = [annotated, mask]
+            return canvas
 
         if name == "heatmap":
-            annotated = self.canva_background.copy()
-            annotated[:, :, :3] = self.heatmap_annontator.annotate(
-                scene=blending[:, :, :3], detections=detections
-            )
-            annotated = self.__masked_annotation(annotated)
-            blending = annotated
-            return blending
+            if "heatmap" not in canvas:
+                annotated = self.heatmap_annontator.annotate(
+                    scene=self.canva_background.copy(), detections=detections
+                )
+                mask = self.__mask_from_annotation(annotated)
+                canvas["heatmap"] = [annotated, mask]
+            return canvas
 
         raise NotImplementedError(f"Annotator {name} is not implemented")
 
@@ -179,38 +163,39 @@ class Pipeline:
         background: np.ndarray = None,
         annotations: List[List[str]] = None,
     ) -> dict:
+        result = {}
+
         with self.lock:
-            result = {"filtered_regions": {}, "annotations": [], "tracked_boxes": []}
-            try:
-                detections = self.tracker.update_with_detections(detections)
+            detections = self.tracker.update_with_detections(detections)
 
-                result["filtered_regions"] = {
-                    region_name: detections.tracker_id[
-                        zone.trigger(detections)
-                    ].tolist()
-                    for region_name, zone in self.filter_regions.items()
-                }
-                result["annotations"] = []
+            result["filtered_regions"] = {
+                region_name: detections.tracker_id[zone.trigger(detections)].tolist()
+                for region_name, zone in self.filter_regions.items()
+            }
+            result["annotations"] = []
 
-                if annotations is not None:
-                    background = (
-                        cv2.cvtColor(background, cv2.COLOR_BGR2BGRA)
-                        if background is not None
-                        else self.canva_background
+            if annotations is not None:
+                has_background = background is not None
+                canvas = {}
+                for annotation in annotations:
+                    for annotator in annotation:
+                        canvas = self.__annotate(canvas, annotator, detections)
+                    # TODO: check if background has alpha channel
+                    blending = (
+                        background.copy()
+                        if has_background
+                        else self.canva_background.copy()
                     )
-                    canvas_cache = {}
-                    for annotation in annotations:
-                        blending = background.copy()
-                        for annotator in annotation:
-                            blending = self.__annotate(
-                                canvas=canvas_cache,
-                                name=annotator,
-                                detections=detections,
-                                blending=blending,
+                    for name, [annotated, mask] in canvas.items():
+                        if name == "heatmap":
+                            blending = self.__weighted_overlay(
+                                blending, annotated, mask, self.canva_heatmap_weight
                             )
-                        result["annotations"].append(image_to_base64(blending))
+                        else:
+                            blending = self.__overlay(blending, annotated, mask)
 
-                result["tracked_boxes"] = detection_to_tracked_bboxs(detections)
-            except Exception as exc:  # pylint: disable=broad-except
-                logger.warning("Failed to track detections", exc_info=exc)
+                    result["annotations"].append(image_to_base64(blending))
+
+            result["tracked_boxes"] = detection_to_tracked_bboxs(detections)
+
         return result
