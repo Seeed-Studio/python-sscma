@@ -1,5 +1,5 @@
-import ssl
-
+from os import sched_getaffinity
+from ssl import SSLContext, PROTOCOL_TLS_SERVER
 from socketserver import ThreadingMixIn
 from http import server as http_server
 from concurrent.futures import ThreadPoolExecutor
@@ -33,6 +33,8 @@ class HTTPServer:
         self.ssl_enabled = ssl_enabled
         self.ssl_certfile = ssl_certfile
         self.ssl_keyfile = ssl_keyfile
+        if max_workers <= 0:
+            max_workers = len(sched_getaffinity(0))
         self.max_workers = max_workers
 
     def serve_forever(self):
@@ -40,7 +42,7 @@ class HTTPServer:
             (self.host, self.port), HTTPHandler, max_workers=self.max_workers
         )
         if self.ssl_enabled:
-            context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            context = SSLContext(PROTOCOL_TLS_SERVER)
             context.load_cert_chain(
                 certfile=self.ssl_certfile, keyfile=self.ssl_keyfile
             )

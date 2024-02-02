@@ -1,7 +1,9 @@
 from typing import List
 
 from threading import Lock
+from concurrent.futures import ThreadPoolExecutor
 
+from os import sched_getaffinity
 import numpy as np
 
 from supervision import (
@@ -27,6 +29,9 @@ from .utils import (
 class Pipeline:
     def __init__(self, config: SessionConfig):
         self.lock = Lock()
+
+        cores = len(sched_getaffinity(0))
+        self.pool = ThreadPoolExecutor(max_workers=cores)
 
         tracker_config = config.tracker_config
         self.tracker = ByteTrack(
@@ -178,8 +183,10 @@ class Pipeline:
                 has_background = background is not None
                 canvas = {}
                 for annotation in annotations:
-                    for annotator in annotation:
-                        canvas = self.__annotate(canvas, annotator, detections)
+                    self.pool.map(
+                        self.__annotate,
+                        [(canvas, annotator, detections) for annotator in annotation],
+                    )
                     # TODO: check if background has alpha channel
                     blending = (
                         background.copy()
