@@ -8,7 +8,7 @@ microcontroller at server for the [SSCMA](https://github.com/Seeed-Studio/SSCMA)
 models.
 
 More information about the sscma_micro can be found at
-[here](https://github.com/Seeed-Studio/sscma_micro/blob/dev/docs/protocol/at_protocol.md)
+[here](https://github.com/Seeed-Studio/SSCMA-Micro/blob/dev/docs/protocol/at_protocol.md)
 
 ## Usage
 
