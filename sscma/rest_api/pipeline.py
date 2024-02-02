@@ -1,7 +1,7 @@
 from typing import List
 
 from threading import Lock
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait
 
 from os import sched_getaffinity
 import numpy as np
@@ -115,7 +115,7 @@ class Pipeline:
         if name == "polygon":
             if "polygon" not in canvas:
                 canvas["polygon"] = self.canva_polygon.copy()
-            return canvas
+            return
 
         if name == "bounding_box":
             if "bounding_box" not in canvas:
@@ -124,7 +124,7 @@ class Pipeline:
                 )
                 mask = self.__mask_from_annotation(annotated)
                 canvas["bounding_box"] = [annotated, mask]
-            return canvas
+            return
 
         if name == "tracing":
             if "tracing" not in canvas:
@@ -133,7 +133,7 @@ class Pipeline:
                 )
                 mask = self.__mask_from_annotation(annotated)
                 canvas["tracing"] = [annotated, mask]
-            return canvas
+            return
 
         if name == "labeling":
             if "labeling" not in canvas:
@@ -149,7 +149,7 @@ class Pipeline:
                 )
                 mask = self.__mask_from_annotation(annotated)
                 canvas["labeling"] = [annotated, mask]
-            return canvas
+            return
 
         if name == "heatmap":
             if "heatmap" not in canvas:
@@ -158,7 +158,7 @@ class Pipeline:
                 )
                 mask = self.__mask_from_annotation(annotated)
                 canvas["heatmap"] = [annotated, mask]
-            return canvas
+            return
 
         raise NotImplementedError(f"Annotator {name} is not implemented")
 
@@ -183,17 +183,19 @@ class Pipeline:
                 has_background = background is not None
                 canvas = {}
                 for annotation in annotations:
-                    self.pool.map(
-                        self.__annotate,
-                        [(canvas, annotator, detections) for annotator in annotation],
-                    )
-                    # TODO: check if background has alpha channel
+                    futures = [
+                        self.pool.submit(self.__annotate, canvas, annotator, detections)
+                        for annotator in annotation
+                    ]
+                    wait(futures, return_when="ALL_COMPLETED")
+
                     blending = (
                         background.copy()
                         if has_background
                         else self.canva_background.copy()
                     )
-                    for name, [annotated, mask] in canvas.items():
+                    for name in annotation:
+                        annotated, mask = canvas[name]
                         if name == "heatmap":
                             blending = self.__weighted_overlay(
                                 blending, annotated, mask, self.canva_heatmap_weight
