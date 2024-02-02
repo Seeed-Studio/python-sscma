@@ -168,43 +168,45 @@ class Pipeline:
         background: np.ndarray = None,
         annotations: List[List[str]] = None,
     ) -> dict:
-        result = {}
 
         with self.lock:
             detections = self.tracker.update_with_detections(detections)
-
-            result["filtered_regions"] = {
+            filtered_regions = {
                 region_name: detections.tracker_id[zone.trigger(detections)].tolist()
                 for region_name, zone in self.filter_regions.items()
             }
-            result["annotations"] = []
 
-            if annotations is not None:
-                has_background = background is not None
-                canvas = {}
-                for annotation in annotations:
-                    futures = [
-                        self.pool.submit(self.__annotate, canvas, annotator, detections)
-                        for annotator in annotation
-                    ]
-                    wait(futures, return_when="ALL_COMPLETED")
+        result = {
+            "filtered_regions": filtered_regions,
+            "tracked_boxes": detection_to_tracked_bboxs(detections),
+            "annotations": [],
+        }
 
-                    blending = (
-                        background.copy()
-                        if has_background
-                        else self.canva_background.copy()
-                    )
-                    for name in annotation:
-                        annotated, mask = canvas[name]
-                        if name == "heatmap":
-                            blending = self.__weighted_overlay(
-                                blending, annotated, mask, self.canva_heatmap_weight
-                            )
-                        else:
-                            blending = self.__overlay(blending, annotated, mask)
+        if annotations is not None:
+            has_background = background is not None
+            canvas = {}
+            for annotation in annotations:
+                futures = [
+                    self.pool.submit(self.__annotate, canvas, annotator, detections)
+                    for annotator in annotation
+                ]
+                wait(futures, return_when="ALL_COMPLETED")
 
-                    result["annotations"].append(image_to_base64(blending))
+                blending = (
+                    background.copy()
+                    if has_background
+                    else self.canva_background.copy()
+                )
 
-            result["tracked_boxes"] = detection_to_tracked_bboxs(detections)
+                for name in annotation:
+                    annotated, mask = canvas[name]
+                    if name == "heatmap":
+                        blending = self.__weighted_overlay(
+                            blending, annotated, mask, self.canva_heatmap_weight
+                        )
+                    else:
+                        blending = self.__overlay(blending, annotated, mask)
+
+                result["annotations"].append(image_to_base64(blending))
 
         return result
