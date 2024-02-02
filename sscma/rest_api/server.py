@@ -5,6 +5,7 @@ from http import server as http_server
 from concurrent.futures import ThreadPoolExecutor
 
 from .handler import HTTPHandler
+from .logger import logger
 
 
 class PooledHTTPServer(ThreadingMixIn, http_server.HTTPServer):
@@ -27,6 +28,7 @@ class HTTPServer:
         ssl_certfile: str,
         ssl_keyfile: str,
         max_workers: int,
+        verbose: bool = False,
     ):
         self.host = host
         self.port = port
@@ -36,6 +38,8 @@ class HTTPServer:
         if max_workers <= 0:
             max_workers = len(sched_getaffinity(0))
         self.max_workers = max_workers
+        if verbose:
+            logger.setLevel("DEBUG")
 
     def serve_forever(self):
         server = PooledHTTPServer(
