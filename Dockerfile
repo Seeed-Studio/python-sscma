@@ -1,50 +1,27 @@
-
-FROM --platform=$TARGETPLATFORM debian:bookworm-slim as builder
+FROM --platform=$TARGETPLATFORM python:3-slim-bookworm as builder
 
 WORKDIR /tmp
 
 COPY . /tmp
 
 RUN set -ex && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends \
-        python3 \
-        python3-build \
-        python3-venv \
-        && \
+    python3 -m pip install build && \
     python3 -m build --sdist && \
     tar -xzf dist/*.tar.gz -C dist && \
     rm dist/*.tar.gz
 
 
-FROM --platform=$TARGETPLATFORM debian:bookworm-slim
+FROM --platform=$TARGETPLATFORM python:3-slim-bookworm
 
-WORKDIR /home
+WORKDIR /tmp
 
+
+COPY --from=builder /tmp/requirements.txt /tmp/
 COPY --from=builder /tmp/dist/python-sscma-* /home/python-sscma
 
 RUN set -ex && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends \
-        python3 \
-        python3-pip \
-        python3-opencv \
-        python3-numpy \
-        python3-scipy \
-        python3-matplotlib \
-        python3-tqdm \
-        python3-click \
-        python3-xmodem \
-        python3-paho-mqtt \
-        python3-serial \
-        python3-yaml \
-        python3-defusedxml \
-        && \
-    apt-get clean
-
-RUN set -ex && \
-    python3 -m pip install --no-cache-dir --no-deps --break-system-packages supervision && \
-    python3 -m pip install --no-deps --break-system-packages -e /home/python-sscma && \
-    rm -fr /tmp/*
+     python3 -m pip install --no-cache-dir -r /tmp/requirements.txt && \
+     python3 -m pip install --no-deps -e /home/python-sscma && \
+     rm -fr /tmp/*
 
 ENTRYPOINT ["sscma.cli"]
