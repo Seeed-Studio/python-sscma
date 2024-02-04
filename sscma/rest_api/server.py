@@ -16,6 +16,7 @@ class PooledHTTPServer(ThreadingMixIn, http_server.HTTPServer):
         self.pool = ThreadPoolExecutor(max_workers=max_workers)
 
     def process_request(self, request, client_address):
+        # NOTE: for each request, we process it using thread-pool in parallel
         self.pool.submit(self.process_request_thread, request, client_address)
 
 
@@ -42,6 +43,7 @@ class HTTPServer:
             logger.setLevel("DEBUG")
 
     def serve_forever(self):
+        # TODO: server side support per clinet HTTP keep-alive
         server = PooledHTTPServer(
             (self.host, self.port), HTTPHandler, max_workers=self.max_workers
         )

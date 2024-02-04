@@ -76,6 +76,7 @@ class HTTPHandler(http.server.SimpleHTTPRequestHandler):
             logger.warning("Failed to write response")
 
     def do_POST(self):
+        # TODO: for stramded request, there's no guarantee that the order of the request is the same as the order of the response
         if not (self.verify_content_type() and self.verify_content_length()):
             return
 
@@ -116,6 +117,7 @@ class HTTPHandler(http.server.SimpleHTTPRequestHandler):
                 self.end_headers()
 
                 try:
+                    # TODO: wait until there's no previous responses which not written
                     self.wfile.write(bytes(json.dumps(response).encode()))
                 except BrokenPipeError:
                     logger.warning("Failed to write response")
