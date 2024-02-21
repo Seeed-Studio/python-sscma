@@ -159,7 +159,7 @@ def parse_bytes_to_json(request: bytes) -> dict:
 
 def detection_to_tracked_bboxs(detection: Detections) -> list:
     cxcywhs = (
-        np.round([xyxy_to_cxcywh(xyxy) for xyxy in detection.xyxy]).astype(int).tolist()
+        np.round([xyxy_to_cxcywh(xyxy) for xyxy in detection.xyxy.copy()]).astype(int).tolist()
     )
     confidences = np.round(detection.confidence * 100.0).astype(int).tolist()
     class_ids = detection.class_id.astype(int).tolist()
