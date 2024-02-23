@@ -7,6 +7,7 @@ from os import sched_getaffinity
 import numpy as np
 
 from supervision import (
+    Detections,
     ByteTrack,
     BoundingBoxAnnotator,
     LabelAnnotator,
@@ -28,7 +29,8 @@ from .utils import (
 
 class Pipeline:
     def __init__(self, config: SessionConfig):
-        self.lock = Lock()
+        self.tracker_lock = Lock()
+        self.tracing_lock = Lock()
 
         cores = len(sched_getaffinity(0))
         self.pool = ThreadPoolExecutor(max_workers=cores)
@@ -111,86 +113,83 @@ class Pipeline:
         background[mask] = background[mask] * (1.0 - weight) + foreground[mask] * weight
         return background
 
-    def __annotate(self, canvas: dict, name: str, detections: dict):
+    def __annotate(self, name: str, detections: Detections):
         if name == "polygon":
-            if "polygon" not in canvas:
-                canvas["polygon"] = self.canva_polygon.copy()
-            return
+            return self.canva_polygon.copy()
 
         if name == "bounding_box":
-            if "bounding_box" not in canvas:
-                annotated = self.box_annotator.annotate(
-                    scene=self.canva_background.copy(), detections=detections
-                )
-                mask = self.__mask_from_annotation(annotated)
-                canvas["bounding_box"] = [annotated, mask]
-            return
+            annotated = self.box_annotator.annotate(
+                scene=self.canva_background.copy(), detections=detections
+            )
+            mask = self.__mask_from_annotation(annotated)
+            return [annotated, mask]
 
         if name == "tracing":
-            if "tracing" not in canvas:
+            with self.tracing_lock:
                 annotated = self.trace_annotator.annotate(
                     scene=self.canva_background.copy(), detections=detections
                 )
-                mask = self.__mask_from_annotation(annotated)
-                canvas["tracing"] = [annotated, mask]
-            return
+            mask = self.__mask_from_annotation(annotated)
+            return [annotated, mask]
 
         if name == "labeling":
-            if "labeling" not in canvas:
-                annotated = self.label_annotator.annotate(
-                    scene=self.canva_background.copy(),
-                    detections=detections,
-                    labels=[
-                        f"#{tracker_id} {self.label_map[class_id] if class_id in self.label_map else class_id}"
-                        for class_id, tracker_id in zip(
-                            detections.class_id, detections.tracker_id
-                        )
-                    ],
-                )
-                mask = self.__mask_from_annotation(annotated)
-                canvas["labeling"] = [annotated, mask]
-            return
+            annotated = self.label_annotator.annotate(
+                scene=self.canva_background.copy(),
+                detections=detections,
+                labels=[
+                    f"#{tracker_id} {self.label_map[class_id] if class_id in self.label_map else class_id}"
+                    for class_id, tracker_id in zip(
+                        detections.class_id, detections.tracker_id
+                    )
+                ],
+            )
+            mask = self.__mask_from_annotation(annotated)
+            return [annotated, mask]
 
         if name == "heatmap":
-            if "heatmap" not in canvas:
-                annotated = self.heatmap_annontator.annotate(
-                    scene=self.canva_background.copy(), detections=detections
-                )
-                mask = self.__mask_from_annotation(annotated)
-                canvas["heatmap"] = [annotated, mask]
-            return
+            annotated = self.heatmap_annontator.annotate(
+                scene=self.canva_background.copy(), detections=detections
+            )
+            mask = self.__mask_from_annotation(annotated)
+            return [annotated, mask]
 
         raise NotImplementedError(f"Annotator {name} is not implemented")
 
+    def __annotate_and_assign(self, name: str, detections: Detections, canvas: dict):
+        canvas[name] = self.__annotate(name, detections)
+
     def push(
         self,
-        detections: dict,
+        detections: Detections,
         background: np.ndarray = None,
         annotations: List[List[str]] = None,
     ) -> dict:
 
-        with self.lock:
+        with self.tracker_lock:
             detections = self.tracker.update_with_detections(detections)
-            filtered_regions = {
-                region_name: detections.tracker_id[zone.trigger(detections)].tolist()
-                for region_name, zone in self.filter_regions.items()
-            }
 
+        filtered_regions = {
+            region_name: detections.tracker_id[zone.trigger(detections)].tolist()
+            for region_name, zone in self.filter_regions.items()
+        }
+        annotated_images = []
         result = {
             "filtered_regions": filtered_regions,
             "tracked_boxes": detection_to_tracked_bboxs(detections),
-            "annotations": [],
+            "annotations": annotated_images,
         }
 
         if annotations is not None:
             has_background = background is not None
             canvas = {}
             for annotation in annotations:
-                futures = [
-                    self.pool.submit(self.__annotate, canvas, annotator, detections)
-                    for annotator in annotation
-                ]
-                wait(futures, return_when="ALL_COMPLETED")
+                required = set(annotation) - set(canvas.keys())
+                if len(required) > 0:
+                    futures = [
+                        self.pool.submit(self.__annotate_and_assign, name, detections, canvas)
+                        for name in required
+                    ]
+                    wait(futures, return_when="ALL_COMPLETED")
 
                 blending = (
                     background.copy()
@@ -207,6 +206,6 @@ class Pipeline:
                     else:
                         blending = self.__overlay(blending, annotated, mask)
 
-                result["annotations"].append(image_to_base64(blending))
+                annotated_images.append(image_to_base64(blending))
 
         return result
