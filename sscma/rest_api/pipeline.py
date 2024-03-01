@@ -1,9 +1,10 @@
 from typing import List
 
+import os
+
 from threading import Lock
 from concurrent.futures import ThreadPoolExecutor, wait
 
-from os import sched_getaffinity
 import numpy as np
 
 from supervision import (
@@ -28,12 +29,11 @@ from .utils import (
 
 
 class Pipeline:
-    def __init__(self, config: SessionConfig):
+    def __init__(self, config: SessionConfig, workers=os.cpu_count()):
         self.tracker_lock = Lock()
         self.tracing_lock = Lock()
 
-        cores = len(sched_getaffinity(0))
-        self.pool = ThreadPoolExecutor(max_workers=cores)
+        self.pool = ThreadPoolExecutor(max_workers=workers if workers is not None else 1)
 
         tracker_config = config.tracker_config
         self.tracker = ByteTrack(

@@ -1,4 +1,5 @@
-from os import sched_getaffinity
+import os
+
 from ssl import SSLContext, PROTOCOL_TLS_SERVER
 from socketserver import ThreadingMixIn
 from http import server as http_server
@@ -37,8 +38,10 @@ class HTTPServer:
         self.ssl_certfile = ssl_certfile
         self.ssl_keyfile = ssl_keyfile
         if max_workers <= 0:
-            max_workers = len(sched_getaffinity(0))
-        self.max_workers = max_workers
+            # may not equivalent to the number of logical CPUs the current process can use
+            # not use len(os.sched_getaffinity(0)) due to the lack of support on different OS
+            max_workers = os.cpu_count() 
+        self.max_workers = max_workers if max_workers is not None else 1
         if verbose:
             logger.setLevel("DEBUG")
 
