@@ -45,7 +45,7 @@ class Pipeline:
 
         annotation_config = config.annotation_config
         self.canva_resolution = annotation_config.resolution[:2]
-        self.canva_background = np.zeros((*self.canva_resolution, 3), dtype=np.uint8)
+        self.canva_background = np.zeros((*reversed(self.canva_resolution), 3), dtype=np.uint8)
         polygon_canva = self.canva_background.copy()
         polygon_color_platte = ColorPalette.from_hex(color_from_cmap("Pastel2"))
         self.filter_regions = {}
