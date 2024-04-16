@@ -8,7 +8,7 @@ microcontroller at server for the [SSCMA](https://github.com/Seeed-Studio/SSCMA)
 models.
 
 More information about the sscma_micro can be found at
-[here](https://github.com/Seeed-Studio/SSCMA-Micro/blob/dev/docs/protocol/at_protocol.md)
+[here](https://github.com/Seeed-Studio/sscma_micro/blob/dev/docs/protocol/at_protocol.md)
 
 ## Usage
 
@@ -17,86 +17,76 @@ More information about the sscma_micro can be found at
 ```bash
 pip install python-sscma
 ```
-```python
-from sscma.micro.client import Client, SerialClient
-from sscma.micro.device import Device
-from sscma.micro.const import *
-import serial
-import threading
-import time
-import logging
-import signal
-import cv2
-import base64
-import numpy as np
 
-logging.basicConfig(level=logging.DEBUG)
+```bash
+sscma.cli --help
+Usage: sscma.cli [OPTIONS] COMMAND [ARGS]...
 
-_LOGGER = logging.getLogger(__name__)
+Options:
+  --help  Show this message and exit.
 
+Commands:
+  client
+  flasher
+  server
+```
 
-def monitor_handler(device, msg):
-    if "image" in msg:
-        jpeg_bytes = base64.b64decode(msg["image"])
+### Client
 
-        # Convert the bytes into a numpy array
-        nparr = np.frombuffer(jpeg_bytes, np.uint8)
+```bash
+sscma.cli client --help
+Usage: sscma.cli client [OPTIONS]
 
-        # Decode the image array using OpenCV
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+Options:
+  -B, --broker TEXT       Specify the MQTT broker address
+  -U, --username TEXT     Specify the MQTT username
+  -P, --password TEXT     Specify the MQTT password
+  -D, --device TEXT       Specify the Device ID
+  -p, --port TEXT         Specify the Port to connect to
+  -b, --baudrate INTEGER  Specify the Baudrate for the serial connection
+  --sample                Enable the sample mode
+  --invoke                Enable the invoke mode
+  -s, --save              Enable the save mode
+  -o, --save_dir TEXT     Specify the Directory for saveing images
+  -h, --headless          Run the program without displaying the images
+  -v, --verbose           Show detailed information during processin
+  --help                  Show this message and exit.
+```
 
-        # Display the image
-        cv2.imshow('Base64 Image', img)
-        cv2.waitKey(1)
-        msg.pop("image")
-    print(msg)
+#### Client with Serial
 
+```bash
+sscma.cli client ---port /dev/ttyUSB0 
+```
 
-def on_device_connect(device):
-    print("device connected")
-    device.Invoke(-1, False, True)
-    device.tscore = 70
-    device.tiou = 70
+#### Client with MQTT
 
+```bash
+sscma.cli client --broker mqtt.broker.com --username username --password password -device device_id 
+```
 
-client = SerialClient("COM83")
+#### Sample 
 
-def signal_handler(signal, frame):
-    print("Ctrl+C pressed!")
-    client.loop_stop()
-   
-def main():
+```bash
+sscmai client --port /dev/ttyUSB0 --save 
+```
 
-    signal.signal(signal.SIGINT, signal_handler)
- 
-    device = Device(client)
+### Flasher
 
-    device.on_monitor = monitor_handler
-    device.on_connect = on_device_connect
-     
-    device.loop_start()
+```bash
+sscma.cli flasher --help
+Usage: sscma.cli flasher [OPTIONS]
 
-    print(device.info)
+Options:
+  -p, --port TEXT         Port to connect to
+  -f, --file TEXT         File to write to the device
+  -b, --baudrate INTEGER  Baud rate for the serial connection
+  -o, --offset TEXT       Offset to write the file to
+  --help 
+```
 
-    i = 60
-
-    while True:
-        print(device.wifi)
-        print(device.mqtt)
-        print(device.info)
-        print(device.model)
-        device.tscore = i
-        device.tiou = i
-        i = i + 1
-        if i > 100:
-            i = 30
-
-        time.sleep(2)
-
-
-if __name__ == "__main__":
-    main()
-
+```bash
+sscma.cli flasher -p /dev/ttyUSB0 -f firmware.bin 
 ```
 
 ## Contributing

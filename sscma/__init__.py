@@ -1,2 +1,4 @@
 from . import micro
-__version__ = "0.2.1"
+from . import flashers
+from . import utils
+__version__ = "0.5.2"
