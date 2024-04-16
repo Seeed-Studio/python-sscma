@@ -4,3 +4,4 @@ paho-mqtt
 xmodem
 tqdm
 click
+opencv-python
