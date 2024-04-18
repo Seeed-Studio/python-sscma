@@ -14,6 +14,14 @@ class BaseFlasher(ABC):
         """
         pass
     
+    @classmethod
+    def name():
+        """Get the name of the programmer.
+
+        This method should be overridden by the subclass.
+        """
+        pass
+    
 
     @classmethod
     @abstractmethod

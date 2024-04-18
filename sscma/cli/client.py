@@ -10,7 +10,7 @@ from sscma.micro.device import Device
 from sscma.micro.const import *
 from sscma.utils.image import  image_from_base64
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.WARNING)
 
 @click.command()
 @click.option('--broker', '-B', default=None, help='Specify the MQTT broker address')
@@ -19,18 +19,13 @@ logging.basicConfig(level=logging.INFO)
 @click.option('--device', '-D', default=None, help='Specify the Device ID')
 @click.option('--port', '-p', default=None, help='Specify the Port to connect to')
 @click.option('--baudrate',  '-b', default=921600, help='Specify the Baudrate for the serial connection')
-@click.option('--sample', is_flag=True, help='Enable the sample mode')
-@click.option('--invoke', is_flag=True, default=True, help='Enable the invoke mode')
+@click.option('--sample', is_flag=True,  default=False, help='Enable the Sample mode, default is Invoke mode')
 @click.option('--save', '-s', is_flag=True, default=False, help='Enable the save mode')
 @click.option('--save_dir', '-o', default="save", help="Specify the Directory for saveing images")
 @click.option('--headless', '-h', is_flag=True,  help='Run the program without displaying the images')
 @click.option('--verbose', '-v', is_flag=True, help='Show detailed information during processin')
-def client(broker, username, password, device, port, baudrate, sample, invoke, save, save_dir, headless, verbose):
+def client(broker, username, password, device, port, baudrate, sample, save, save_dir, headless, verbose):
     try:
-        
-        if sample and invoke:
-            click.echo("Error: 'sample' and 'invoke' options are mutually exclusive. Please choose one.")
-            return
         
         try:
             if int(save) > 0:
@@ -89,7 +84,7 @@ def client(broker, username, password, device, port, baudrate, sample, invoke, s
                 click.echo("\nEnter'ESC' to exit\n")
             if sample:
                 device.Sample(-1)
-            elif invoke:
+            else:
                 device.Invoke(-1)
             
         def on_disconnect(device):

@@ -13,13 +13,15 @@ def get_flasher_by_port(com=None):
         raise ImportError("Sorry: no implementation for your platform ('{}') available".format(os.name))
     
     ports = comports()
+    selected_port = None
+    selected_flasher = None
 
     if len(ports) == 0:
         raise Exception('No Device Found')
     
  
-    if com is None:
-        # 如果未指定 com 口，则让用户选择
+    if com is None and len(ports) > 1:
+        # if we don't specify com port, let user select one
         click.echo("Multiple COM ports detected. Please select one:")
         for idx, port in enumerate(ports):
             click.echo(f"{idx + 1}. {port.device}")
@@ -27,15 +29,25 @@ def get_flasher_by_port(com=None):
         selected_port = ports[choice - 1]
     else:
         for port in ports:
-            if port.device == com:
-                selected_port = port
+            selected_port = port
+            if selected_port.device == com:
                 break
     
     for flasher in FLASHERS:
         if flasher.match(selected_port):
-            return flasher, selected_port.device
+            selected_flasher = flasher
+            break
+        
+    if selected_flasher is None and selected_port is not None:
+            click.echo(("Found device {}. Please select flasher.").format(selected_flasher))
+            for idx, flasher in enumerate(FLASHERS):
+                click.echo(f"{idx + 1}. {flasher.name()}")
+                choice = click.prompt("Enter the number of the flasher", type=int)
+                selected_flasher = FLASHERS[choice - 1]
+            else:
+                click.echo("No device found. Exiting.")
     
-    return None, None
+    return selected_flasher, selected_port.device
 
 @click.command()
 @click.option('--port', '-p', default=None, help='Port to connect to')
@@ -46,8 +58,8 @@ def flasher(port, baudrate, file, offset):
     try:
         Flasher, device = get_flasher_by_port(port)
         
-        if not Flasher:
-            click.echo("No flasher found. Exiting.")
+        if Flasher is None or device is None:
+            click.echo("No device found. Exiting.")
             return
         
         flasher = Flasher(device, baudrate=baudrate)

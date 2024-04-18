@@ -11,6 +11,8 @@ from sscma.flashers.base import BaseFlasher
 
 class HimaxFlasher(BaseFlasher):
     
+    _NAME = "Himax Flasher"
+    
     _USB = [{"vid": 0x1A86, "pid": 0x55D2},
             {"vid": 0x1A86, "pid": 0x55D3}]
     
@@ -30,14 +32,18 @@ class HimaxFlasher(BaseFlasher):
     
         super().__init__()
         
+    def name():
+        return HimaxFlasher._NAME
+        
     def match(port):
+
         for usb in HimaxFlasher._USB:
             if usb['vid'] == port.vid and usb['pid'] == port.pid:
                 return True
         return False
         
 
-        
+    
     def getc(self, size, timeout=1):
         data = self.serial.read(size) or None
         return data
