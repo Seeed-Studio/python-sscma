@@ -44,8 +44,7 @@ Options:
   -D, --device TEXT       Specify the Device ID
   -p, --port TEXT         Specify the Port to connect to
   -b, --baudrate INTEGER  Specify the Baudrate for the serial connection
-  --sample                Enable the sample mode
-  --invoke                Enable the invoke mode
+  --sample                Enable the Sample mode, default is Invoke mode
   -s, --save              Enable the save mode
   -o, --save_dir TEXT     Specify the Directory for saveing images
   -h, --headless          Run the program without displaying the images
