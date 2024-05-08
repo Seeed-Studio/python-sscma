@@ -1,5 +1,7 @@
+import traceback
 import click
 from sscma.flashers import FLASHERS
+
 
 def get_flasher_by_port(com=None):
     
@@ -54,7 +56,13 @@ def get_flasher_by_port(com=None):
 @click.option('--file', '-f', default=None, help='File to write to the device')
 @click.option('--baudrate',  '-b', default=921600, help='Baud rate for the serial connection')
 @click.option('--offset', '-o', default='0x00', help='Offset to write the file to')
-def flasher(port, baudrate, file, offset):
+@click.option('--sn', '-s', is_flag=True, default=False, help='Write serial number')
+def flasher(port, baudrate, file, offset, sn):
+    
+    if sn is False and file is None:
+        click.echo("No operation specified. Exiting.")
+        exit(0)
+    
     try:
         Flasher, device = get_flasher_by_port(port)
         
@@ -63,15 +71,21 @@ def flasher(port, baudrate, file, offset):
             return
         
         flasher = Flasher(device, baudrate=baudrate)
-        if file:
+        
+        if file is not None:
             with open(file, 'rb') as file:
                 data = file.read()
                 click.echo(("Found device {}. Writing file to device...").format(device))
                 click.echo(("File: {}").format(file.name))
                 click.echo(("Offset: {}").format(offset))
                 flasher.write(data, offset=int(offset, 16))
-        else:
-            click.echo("No operation specified. Exiting.")
+        
+        if sn:            
+            number = flasher.write_sn()
+            click.echo(("Serial number: {}").format(number))
+            
+       
     except Exception as e:
         click.echo("Error: {}".format(e))
+        traceback.print_exc()
         return

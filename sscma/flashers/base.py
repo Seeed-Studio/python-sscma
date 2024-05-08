@@ -39,3 +39,11 @@ class BaseFlasher(ABC):
         This method should be overridden by the subclass.
         """
         pass
+    
+    @abstractmethod
+    def write_sn(self):
+        """Write serial number to the programmer.
+
+        This method should be overridden by the subclass.
+        """
+        pass

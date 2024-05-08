@@ -2,11 +2,20 @@ import io
 import time
 import serial 
 import logging
+import secrets
 
 from tqdm import tqdm
 from xmodem import XMODEM
 
 from sscma.flashers.base import BaseFlasher
+
+def fnv_hash(id_full):
+    hash_value = 0x811c9dc5
+    prime = 0x1000193
+    for value in id_full:
+        hash_value ^= value
+        hash_value *= prime
+    return hash_value & 0xFFFFFFFF 
 
 
 class HimaxFlasher(BaseFlasher):
@@ -166,6 +175,14 @@ class HimaxFlasher(BaseFlasher):
         self.serial.close()
         
         progress_bar.close()
+        
+        
+    def write_sn(self):
+        random_bytes = secrets.token_bytes(4 * 1024)
+        sn = str(hex(fnv_hash(random_bytes[:16])))
+        self.write(random_bytes, 0x003DF000)
+        return sn
+        
  
         
             
