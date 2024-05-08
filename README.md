@@ -81,11 +81,16 @@ Options:
   -f, --file TEXT         File to write to the device
   -b, --baudrate INTEGER  Baud rate for the serial connection
   -o, --offset TEXT       Offset to write the file to
-  --help 
+  -s, --sn                Write serial number
+  --help                  Show this message and exit.
 ```
 
 ```bash
 sscma.cli flasher -p /dev/ttyUSB0 -f firmware.bin 
+```
+
+```bash
+sscma.cli flasher -p /dev/ttyUSB0 -s
 ```
 
 ## Contributing
