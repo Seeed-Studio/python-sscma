@@ -120,7 +120,7 @@ class HimaxFlasher(BaseFlasher):
         
         self.wait_for_bootloader()
         
-        #self.wait_for_flash()
+        self.wait_for_flash()
         time.sleep(1)
         self.serial.reset_input_buffer()
         
