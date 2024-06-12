@@ -4,4 +4,4 @@ paho-mqtt < 2.0.0
 xmodem
 tqdm
 click
-opencv-python
+opencv-python>=4.8.1,<4.9.0
