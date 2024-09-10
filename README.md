@@ -55,13 +55,13 @@ Options:
 #### Client with Serial
 
 ```bash
-sscma.cli client ---port /dev/ttyUSB0 
+sscma.cli client --port /dev/ttyUSB0 
 ```
 
 #### Client with MQTT
 
 ```bash
-sscma.cli client --broker mqtt.broker.com --username username --password password -device device_id 
+sscma.cli client --broker mqtt.broker.com --username username --password password --device device_id 
 ```
 
 #### Sample 
