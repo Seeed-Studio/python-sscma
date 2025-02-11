@@ -38,35 +38,35 @@ def from_sscma_micro_cls(cls: Classifications, results: dict) -> Classifications
     if "classes" not in results:
         raise ValueError("No classes in detection")
     classes = results["classes"]  # [class_id, confidence]
-    
+
     CONFIDENCE = 0
     CLASS_ID = 1
     LEN = len(classes)
-    
+
     if LEN == 0:
-        return cls(class_id=np.array([]), confidence=np.array([])) 
-    
+        return cls(class_id=np.array([]), confidence=np.array([]))
+
     class_ids = np.empty((LEN), dtype=int)
     confidences = np.empty((LEN))
-    
+
     for i, class_ in enumerate(classes):
         confidences[i] = class_[CONFIDENCE] / 100.0
         class_ids[i] = class_[CLASS_ID]
-    
-        
+
+
     return cls(class_id=class_ids, confidence=confidences)
-        
+
 
 class ClassAnnotartor():
     """
     A class for drawing class name and confidence on the image
     """
-    
+
     def __init__(
         self,
-        color: Union[Color, ColorPalette] = ColorPalette.default(),
+        color: Union[Color, ColorPalette] = ColorPalette.DEFAULT,
         opacity: float = 0.5,
-        text_color: Color = Color.white(),
+        text_color: Color = Color.WHITE,
         text_scale: float = 0.5,
         text_thickness: int = 1,
         text_padding: int = 5,
@@ -93,14 +93,14 @@ class ClassAnnotartor():
         self.text_padding: int = text_padding
         self.color_lookup: ColorLookup = color_lookup
 
-    
+
     def annotate(
         self,
         scene: np.ndarray,
         classifications: Classifications,
         labels: List[str] = None,
     ) -> np.ndarray:
-        
+
         """
         Annotates the given scene with labels based on the provided classifications.
 
@@ -128,7 +128,7 @@ class ClassAnnotartor():
         ![label-annotator-example](https://media.roboflow.com/
         supervision-annotator-examples/label-annotator-example-purple.png)
         """
-        
+
         font = cv2.FONT_HERSHEY_SIMPLEX
         mask_image = scene.copy()
         for i, (class_id, confidnes) in enumerate(zip(classifications.class_id, classifications.confidence)):
@@ -164,5 +164,5 @@ class ClassAnnotartor():
                 thickness=self.text_thickness,
                 lineType=cv2.LINE_AA,
             )
-            
+
         return scene
