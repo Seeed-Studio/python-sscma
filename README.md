@@ -11,11 +11,20 @@ More information about the sscma_micro can be found at
 [here](https://github.com/Seeed-Studio/SSCMA-Micro/blob/dev/docs/protocol/at_protocol.md)
 
 ## Usage
+### Install Development version
 
-### Install
+```ini
+
+git clone https://github.com/Seeed-Studio/python-sscma
+cd python-sscma
+sudo pip install -U -e .
+```
+
+
+### Install Stable version
 
 ```bash
-pip install python-sscma
+sudo pip install python-sscma
 ```
 
 ```bash
