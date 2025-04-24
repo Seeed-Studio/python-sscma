@@ -24,7 +24,7 @@ setuptools.setup(
     install_requires=[
         'pillow',
         'pyserial',
-        'paho-mqtt < 2.0.0',
+        'paho-mqtt > 2.0.0',
         'xmodem',
         'tqdm',
         'click',

@@ -196,7 +196,7 @@ class Client:
 
             if not wait_event or listener.response is not None:
                 break
-            
+
         if listener.response is None and wait_event:
             _LOGGER.debug("send_command:{} timeout".format(command))
 
@@ -355,7 +355,7 @@ class SerialClient(Client):
     def disconnect(self):
         if self._serial.is_open:
             self._serial.close()
-    
+
     @property
     def is_connected(self):
         return self._serial.is_open
@@ -385,7 +385,7 @@ class MQTTClient(Client):
 
     def __init__(self, host="localhost", port=1883, tx_topic="#", rx_topic="#", **kwargs):
 
-        self._client = self.mqtt.Client()
+        self._client = self.mqtt.Client(self.mqtt.CallbackAPIVersion.VERSION2)
         self._tx_topic = tx_topic
         self._rx_topic = rx_topic
         self._client.on_message = self.__on_recieve
@@ -403,21 +403,23 @@ class MQTTClient(Client):
         self._client.connect(self._host, self._port, 120)
         super().__init__(lambda msg: self._client.publish(
             self._tx_topic, msg, qos=0))
-        
+
 
     def __on_recieve(self, client, userdata, msg):
         self.on_recieve(msg.payload)
 
-    def __on_connect(self, client, userdata, flags, rc):
+    def __on_connect(self, client, userdata, flags, rc, _):
         self._client.subscribe(self._rx_topic)
-        
+
+
+
     @property
     def is_connected(self):
         return self._client.is_connected()
 
     def connect(self):
         self._client.connect(self._host, self._port, 120)
-        
+
     def disconnect(self):
         self._client.disconnect()
 
