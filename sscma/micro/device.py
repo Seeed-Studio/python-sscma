@@ -693,31 +693,31 @@ class Device:
                 reply = event["data"]
 
                 #draw image
-                if "image" in event["data"] and event["data"]["image"]:
+                # if "image" in event["data"] and event["data"]["image"]:
+                #
+                #     ImageFile.LOAD_TRUNCATED_IMAGES = True
+                #     image = Image.open(io.BytesIO(
+                #         base64.b64decode(event["data"]["image"])))
+                #
+                #     if "classes" in event["data"]:
+                #         image = self._draw_classes(
+                #             image, event["data"]["classes"])
+                #
+                #     if "boxes" in event["data"]:
+                #         image = self._draw_boxes(image, event["data"]["boxes"])
+                #
+                #     if "points" in event["data"]:
+                #         image = self._draw_keypoints(
+                #             image, event["data"]["keypoints"])
+                #
+                #     # reconvert image to base64
+                #     buf = io.BytesIO()
+                #     reply["image"] = image.save(buf, format='JPEG')
+                #     base64_image = base64.b64encode(
+                #         buf.getvalue()).decode('utf-8')
+                #     reply["image"] = base64_image
 
-                    ImageFile.LOAD_TRUNCATED_IMAGES = True
-                    image = Image.open(io.BytesIO(
-                        base64.b64decode(event["data"]["image"])))
-
-                    if "classes" in event["data"]:
-                        image = self._draw_classes(
-                            image, event["data"]["classes"])
-
-                    if "boxes" in event["data"]:
-                        image = self._draw_boxes(image, event["data"]["boxes"])
-
-                    if "points" in event["data"]:
-                        image = self._draw_keypoints(
-                            image, event["data"]["keypoints"])
-
-                    # reconvert image to base64
-                    buf = io.BytesIO()
-                    reply["image"] = image.save(buf, format='JPEG')
-                    base64_image = base64.b64encode(
-                        buf.getvalue()).decode('utf-8')
-                    reply["image"] = base64_image
-
-                self._on_monitor(self, reply)
+                self._on_monitor(self, event)
 
                 return
 
