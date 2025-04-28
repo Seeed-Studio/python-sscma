@@ -28,7 +28,6 @@ setuptools.setup(
         'xmodem',
         'tqdm',
         'click',
-        'opencv-python',
     ],
     classifiers=[
         'License :: OSI Approved :: MIT License',

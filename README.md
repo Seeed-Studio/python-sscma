@@ -17,9 +17,8 @@ More information about the sscma_micro can be found at
 
 git clone https://github.com/Seeed-Studio/python-sscma
 cd python-sscma
-sudo pip install -U -e .
+pip install -U -e .
 ```
-
 
 ### Install Stable version
 
@@ -59,6 +58,11 @@ Options:
   -h, --headless          Run the program without displaying the images
   -v, --verbose           Show detailed information during processin
   --help                  Show this message and exit.
+```
+## Note
+If you want to use the example below, you need to manually install OpenCV
+```inl
+pip install opencv-python
 ```
 
 #### Client with Serial
