@@ -18,7 +18,6 @@ logging.basicConfig(level=logging.DEBUG)
 _LOGGER = logging.getLogger(__name__)
 
 
-# 定义代理服务器和主题
 broker_address = "192.168.199.230"
 rx_topic = "sscma/v0/grove_vision_ai_we2_360779f5/tx"
 tx_topic = "sscma/v0/grove_vision_ai_we2_360779f5/rx"
@@ -66,10 +65,9 @@ def main():
     client.on_connect = on_connect
     client.on_message = on_message
 
-    # 连接到代理服务器
+
     client.connect(broker_address, 1883, 60)
 
-    # 保持连接
     client.loop_start()
 
     tclient = Client(lambda msg: client.publish(tx_topic, msg))
@@ -92,7 +90,7 @@ def main():
 
         time.sleep(2)
 
-    # 断开连接
+
     client.loop_stop()
     client.disconnect()
 
