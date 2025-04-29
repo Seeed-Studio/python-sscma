@@ -692,7 +692,7 @@ class Device:
 
                 reply = event["data"]
 
-                draw image
+                # draw image
                 if "image" in event["data"] and event["data"]["image"]:
                 
                     ImageFile.LOAD_TRUNCATED_IMAGES = True
