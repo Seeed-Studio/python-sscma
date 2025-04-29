@@ -717,7 +717,7 @@ class Device:
                         buf.getvalue()).decode('utf-8')
                     reply["image"] = base64_image
 
-                self._on_monitor(self, event)
+                self._on_monitor(self, reply)
 
                 return
 
